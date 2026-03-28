@@ -9,13 +9,14 @@ services:
       - mongo_data:/data/db
 
   research_agent:
-    build: . # Tells Docker to build the agent using your Dockerfile
+    build: . 
     container_name: swarm_agent
     depends_on:
-      - mongodb # Ensures the database starts before the agent
-    environment:
-      # We pass the token from your Mac's terminal into the container
-      - HUGGINGFACE_HUB_TOKEN=${HUGGINGFACE_HUB_TOKEN} 
+      - mongodb
+    env_file:
+      - .env
+    volumes:
+      - ./output:/app/output
 
 volumes:
   mongo_data:
