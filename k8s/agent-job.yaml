@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: swarm-agent-job
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      containers:
+      - name: agent
+        image: swarm-agent:v1
+        imagePullPolicy: Never
+        command: ["/bin/sh", "-c"]
+        args: ["python agent_with_memory.py && echo 'Sleeping for 5 minutes...' && sleep 300"]
+        env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-secret
+              key: HF_TOKEN
+      restartPolicy: Never
