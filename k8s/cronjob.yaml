@@ -1,0 +1,21 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: daily-finance-swarm
+spec:
+  schedule: "0 8 * * *" 
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: agent
+            image: swarm-agent:v1
+            imagePullPolicy: Never
+            env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secret
+                  key: HF_TOKEN
+          restartPolicy: Never
