@@ -1,6 +1,9 @@
 import os
 from datetime import datetime
 from typing import TypedDict
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
 from langgraph.graph import StateGraph, END
 from huggingface_hub import InferenceClient
 from ddgs import DDGS
@@ -38,23 +41,28 @@ class AgentState(TypedDict):
 # --- 4. Define the Nodes (The Agents) ---
 
 def searcher_node(state: AgentState):
-    print("\n🔍 SEARCHER: Gathering today's news...")
+    print("\n🔍 SEARCHER: Gathering information...")
     query = state["topic"]
     if state["feedback"]:
         print(f"   -> Adjusting search based on feedback: {state['feedback']}")
-        query = f"{state['topic']} {state['feedback']}"
+        query = state['feedback']
 
     try:
         results = DDGS().news(query, timelimit="d", max_results=5)
         
         if not results:
-            print("   -> No news found. Falling back to general web search...")
-            results = DDGS().text(query, timelimit="d", max_results=5)
+            print("   -> No daily news found. Expanding search to the past month...")
+            results = DDGS().text(query, timelimit="m", max_results=5)
             
         snippets = "\n".join([f"- [{r.get('date', 'Recent')}] {r.get('title', '')}: {r.get('body', '')}" for r in results])
     except Exception as e:
         print(f"   -> Search API Error: {e}")
-        snippets = "The search engine blocked the request or returned no data for today. Please inform the user that live data is currently unavailable."
+        print("   -> Attempting unfiltered emergency web search...")
+        try:
+            results = DDGS().text(query, max_results=3)
+            snippets = "\n".join([f"- {r.get('title', '')}: {r.get('body', '')}" for r in results])
+        except:
+            snippets = "The search engine blocked the request. Please provide general macro analysis."
         
     new_research = state["raw_research"] + "\n" + snippets
     return {"raw_research": new_research}
@@ -64,9 +72,20 @@ def analyst_node(state: AgentState):
     today = datetime.now().strftime("%A, %B %d, %Y")
     
     prompt = f"""
-    You are an expert Financial Analyst. Today is {today}. 
-    Write a 3-paragraph daily finance briefing in Markdown about: '{state["topic"]}'.
-    You must ONLY use the following recent news to write the report. Do not use prior knowledge.
+    You are an expert Financial and Career Analyst. Today is {today}. 
+    Write a highly structured daily briefing in Markdown about: '{state["topic"]}'.
+    
+    Structure your report with the following EXACT headers:
+    ### 1. Global Market Trends
+    (Summarize the broader economic news of the day)
+    
+    ### 2. Stock Watchlist (Buy/Sell Signals)
+    (Name specific stocks and whether the recent news implies a bullish or bearish outlook. Note: State that this is for informational purposes, not financial advice.)
+    
+    ### 3. Swiss Engineering Job Market
+    (Highlight specific news, hiring trends, or updates regarding the engineering sector in Switzerland)
+
+    You must ONLY use the following recent news to write the report. Do not hallucinate data.
     
     Raw News Data:
     {state["raw_research"]}
@@ -79,14 +98,17 @@ def analyst_node(state: AgentState):
 def editor_node(state: AgentState):
     print("\n🧐 EDITOR: Reviewing the draft...")
     prompt = f"""
-    You are a strict Editor. Review this draft report about '{state["topic"]}'.
-    It must be detailed, professional, and properly formatted in Markdown.
+    You are a strict Editor. Review this draft report.
+    
+    CRITICAL REQUIREMENTS:
+    1. It MUST explicitly mention specific stocks with buy/watch/sell context.
+    2. It MUST explicitly discuss the engineering job market in Switzerland.
     
     Draft Report:
     {state["draft_report"]}
     
-    If the report is excellent, reply with EXACTLY the word: APPROVED
-    If the report is lacking or too short, reply with the word: REJECTED followed by one sentence of feedback on what to search for next.
+    If the report meets ALL requirements and uses data, reply with EXACTLY the word: APPROVED
+    If the report is missing specific stock tickers, or missing Swiss engineering news, reply with the word: REJECTED followed by a specific search query the Searcher should use next (e.g., "REJECTED Search for recent hiring trends for engineers in Switzerland").
     """
     review = ask_llm(prompt).strip()
     
@@ -99,13 +121,39 @@ def editor_node(state: AgentState):
         return {"status": "rejected", "feedback": feedback, "revision_count": state["revision_count"] + 1}
 
 def save_node(state: AgentState):
-    print("\n💾 SAVING: Writing to DB and File System...")
+    print("\n💾 SAVING: Writing to DB, File System, and Dispatching Email...")
+    
     collection.insert_one({"topic": state["topic"], "summary": state["draft_report"]})
     
     os.makedirs("/app/output", exist_ok=True)
-    filename = f"/app/output/{state['topic'].replace(' ', '_').lower()}_langgraph_report.md"
+    filename = f"/app/output/daily_swiss_finance_briefing.md"
     with open(filename, "w") as f:
         f.write(state["draft_report"])
+        
+    sender_email = os.environ.get("SENDER_EMAIL")
+    sender_password = os.environ.get("SENDER_PASSWORD")
+    receiver_email = os.environ.get("RECEIVER_EMAIL")
+
+    if sender_email and sender_password and receiver_email:
+        try:
+            print("   -> Attempting to send email...")
+            msg = MIMEMultipart()
+            msg['From'] = sender_email
+            msg['To'] = receiver_email
+            msg['Subject'] = f"Swiss Engineering & Global Markets Daily Briefing"
+            
+            msg.attach(MIMEText(state["draft_report"], 'plain'))
+            
+            server = smtplib.SMTP('smtp.gmail.com', 587)
+            server.starttls()
+            server.login(sender_email, sender_password)
+            server.send_message(msg)
+            server.quit()
+            print("   -> 📧 Email sent successfully!")
+        except Exception as e:
+            print(f"   -> ❌ Failed to send email: {e}")
+    else:
+        print("   -> ⚠️ Email credentials not found. Skipping email delivery.")
         
     return state
 
@@ -144,7 +192,7 @@ app = workflow.compile()
 # --- EXECUTION PIPELINE ---
 # ==========================================
 if __name__ == "__main__":
-    topic = "Finance and job market updates"
+    topic = "Global stock market trends, specific stocks to buy/sell, and the engineering job market in Switzerland"
     print(f"\n🚀 Starting LangGraph Swarm for: {topic}")
     
     initial_state = {

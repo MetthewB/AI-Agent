@@ -10,12 +10,25 @@ spec:
       - name: agent
         image: swarm-agent:v1
         imagePullPolicy: Never
-        command: ["/bin/sh", "-c"]
-        args: ["python agent_with_memory.py && echo 'Sleeping for 5 minutes...' && sleep 300"]
         env:
         - name: HF_TOKEN
           valueFrom:
             secretKeyRef:
               name: hf-secret
               key: HF_TOKEN
+        - name: SENDER_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: email-secret
+              key: SENDER_EMAIL
+        - name: SENDER_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: email-secret
+              key: SENDER_PASSWORD
+        - name: RECEIVER_EMAIL
+          valueFrom:
+            secretKeyRef:
+              name: email-secret
+              key: RECEIVER_EMAIL
       restartPolicy: Never

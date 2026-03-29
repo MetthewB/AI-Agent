@@ -3,7 +3,8 @@ kind: CronJob
 metadata:
   name: daily-finance-swarm
 spec:
-  schedule: "0 8 * * *" 
+  schedule: "3 21 * * *"
+  timeZone: "Europe/Paris"
   jobTemplate:
     spec:
       template:
@@ -18,4 +19,19 @@ spec:
                 secretKeyRef:
                   name: hf-secret
                   key: HF_TOKEN
+            - name: SENDER_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: email-secret
+                  key: SENDER_EMAIL
+            - name: SENDER_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: email-secret
+                  key: SENDER_PASSWORD
+            - name: RECEIVER_EMAIL
+              valueFrom:
+                secretKeyRef:
+                  name: email-secret
+                  key: RECEIVER_EMAIL
           restartPolicy: Never
