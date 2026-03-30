@@ -31,4 +31,14 @@ spec:
             secretKeyRef:
               name: email-secret
               key: RECEIVER_EMAIL
+        - name: TELEGRAM_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: telegram-secret
+              key: TELEGRAM_TOKEN
+        - name: TELEGRAM_CHAT_ID
+          valueFrom:
+            secretKeyRef:
+              name: telegram-secret
+              key: TELEGRAM_CHAT_ID
       restartPolicy: Never

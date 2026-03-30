@@ -2,6 +2,7 @@ import os
 from datetime import datetime
 from typing import TypedDict
 import smtplib
+import requests
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 from langgraph.graph import StateGraph, END
@@ -121,13 +122,11 @@ def editor_node(state: AgentState):
         return {"status": "rejected", "feedback": feedback, "revision_count": state["revision_count"] + 1}
 
 def save_node(state: AgentState):
-    print("\n💾 SAVING: Writing to DB, File System, and Dispatching Email...")
+    print("\n💾 SAVING: Writing to DB, File System, and Dispatching Notifications...")
     
     collection.insert_one({"topic": state["topic"], "summary": state["draft_report"]})
-    
     os.makedirs("/app/output", exist_ok=True)
-    filename = f"/app/output/daily_swiss_finance_briefing.md"
-    with open(filename, "w") as f:
+    with open("/app/output/daily_swiss_finance_briefing.md", "w") as f:
         f.write(state["draft_report"])
         
     sender_email = os.environ.get("SENDER_EMAIL")
@@ -154,6 +153,37 @@ def save_node(state: AgentState):
             print(f"   -> ❌ Failed to send email: {e}")
     else:
         print("   -> ⚠️ Email credentials not found. Skipping email delivery.")
+
+    telegram_token = os.environ.get("TELEGRAM_TOKEN")
+    telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
+
+    if telegram_token and telegram_chat_id:
+        try:
+            print("   -> Attempting to send Telegram message...")
+            url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
+            
+            # Telegram limits messages to 4096 characters.
+            text_to_send = state["draft_report"][:4090] 
+            
+            payload = {
+                "chat_id": telegram_chat_id,
+                "text": text_to_send,
+                "parse_mode": "Markdown"
+            }
+            
+            response = requests.post(url, json=payload)
+            
+            # Telegram's Markdown parser is extremely strict. If it fails, we fall back to raw text.
+            if response.status_code != 200:
+                print("   -> ⚠️ Markdown parse failed, retrying as raw text...")
+                payload.pop("parse_mode")
+                requests.post(url, json=payload)
+                
+            print("   -> 📱 Telegram message sent successfully!")
+        except Exception as e:
+            print(f"   -> ❌ Failed to send Telegram message: {e}")
+    else:
+        print("   -> ⚠️ Telegram credentials not found. Skipping Telegram delivery.")
         
     return state
 

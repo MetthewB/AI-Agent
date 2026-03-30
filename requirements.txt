@@ -2,3 +2,4 @@ langgraph
 langchain-huggingface
 ddgs
 pymongo
+requests
