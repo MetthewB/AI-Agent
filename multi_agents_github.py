@@ -65,14 +65,14 @@ def analyst_node(state: AgentState):
     
     prompt = f"""
     You are an expert Financial and Career Analyst. Today is {today}. 
-    Write a highly structured daily briefing in Markdown about: '{state["topic"]}'.
+    Write a highly concise, 1 to 2 paragraph daily briefing in Markdown about: '{state["topic"]}'.
     
-    Structure your report with the following EXACT headers:
-    ### 1. Global Market Trends
-    ### 2. Stock Watchlist (Buy/Sell Signals)
-    ### 3. Swiss Engineering Job Market
+    Your short briefing MUST seamlessly combine and cover:
+    1. Global Market Trends
+    2. Specific Stocks (Buy/Sell/Watch Signals)
+    3. The Swiss Engineering Job Market
 
-    You must ONLY use the following recent news to write the report. Do not hallucinate data.
+    Keep it extremely brief, punchy, and formatted well for a mobile phone message. You must ONLY use the following recent news to write the report. Do not hallucinate data.
     
     Raw News Data:
     {state["raw_research"]}
@@ -88,14 +88,15 @@ def editor_node(state: AgentState):
     You are a strict Editor. Review this draft report.
     
     CRITICAL REQUIREMENTS:
-    1. It MUST explicitly mention specific stocks with buy/watch/sell context.
-    2. It MUST explicitly discuss the engineering job market in Switzerland.
+    1. It MUST be short (only 1 or 2 paragraphs).
+    2. It MUST explicitly mention specific stocks with buy/watch/sell context.
+    3. It MUST explicitly discuss the engineering job market in Switzerland.
     
     Draft Report:
     {state["draft_report"]}
     
     If the report meets ALL requirements and uses data, reply with EXACTLY the word: APPROVED
-    If the report is missing specific stock tickers, or missing Swiss engineering news, reply with the word: REJECTED followed by a specific search query the Searcher should use next.
+    If the report is too long, missing specific stock tickers, or missing Swiss engineering news, reply with the word: REJECTED followed by a specific search query the Searcher should use next.
     """
     review = ask_llm(prompt).strip()
     
@@ -110,27 +111,27 @@ def editor_node(state: AgentState):
 def save_node(state: AgentState):
     print("\n💾 SAVING: Dispatching Notifications...")
     
-    # Email Delivery
-    sender_email = os.environ.get("SENDER_EMAIL")
-    sender_password = os.environ.get("SENDER_PASSWORD")
-    receiver_email = os.environ.get("RECEIVER_EMAIL")
-
-    if sender_email and sender_password and receiver_email:
-        try:
-            print("   -> Attempting to send email...")
-            msg = MIMEMultipart()
-            msg['From'] = sender_email
-            msg['To'] = receiver_email
-            msg['Subject'] = f"Swiss Engineering & Global Markets Daily Briefing"
-            msg.attach(MIMEText(state["draft_report"], 'plain'))
-            server = smtplib.SMTP('smtp.gmail.com', 587)
-            server.starttls()
-            server.login(sender_email, sender_password)
-            server.send_message(msg)
-            server.quit()
-            print("   -> 📧 Email sent successfully!")
-        except Exception as e:
-            print(f"   -> ❌ Failed to send email: {e}")
+    # Email Delivery - COMMENTED OUT
+    # sender_email = os.environ.get("SENDER_EMAIL")
+    # sender_password = os.environ.get("SENDER_PASSWORD")
+    # receiver_email = os.environ.get("RECEIVER_EMAIL")
+    # 
+    # if sender_email and sender_password and receiver_email:
+    #     try:
+    #         print("   -> Attempting to send email...")
+    #         msg = MIMEMultipart()
+    #         msg['From'] = sender_email
+    #         msg['To'] = receiver_email
+    #         msg['Subject'] = f"Swiss Engineering & Global Markets Daily Briefing"
+    #         msg.attach(MIMEText(state["draft_report"], 'plain'))
+    #         server = smtplib.SMTP('smtp.gmail.com', 587)
+    #         server.starttls()
+    #         server.login(sender_email, sender_password)
+    #         server.send_message(msg)
+    #         server.quit()
+    #         print("   -> 📧 Email sent successfully!")
+    #     except Exception as e:
+    #         print(f"   -> ❌ Failed to send email: {e}")
 
     # Telegram Delivery
     telegram_token = os.environ.get("TELEGRAM_TOKEN")
