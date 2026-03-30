@@ -65,19 +65,24 @@ def analyst_node(state: AgentState):
     
     prompt = f"""
     You are an expert Financial and Career Analyst. Today is {today}. 
-    Write a highly concise, 1 to 2 paragraph daily briefing in Markdown about: '{state["topic"]}'.
+    Write a highly concise, 1 to 2 paragraph daily briefing about: '{state["topic"]}'.
+    
+    CRITICAL FORMATTING RULES:
+    - DO NOT use Markdown headers (like ###) or horizontal rules (like ---).
+    - DO NOT use bullet points. 
+    - USE EMOJIS naturally within the text to separate ideas and make it visually appealing for a mobile chat (e.g., 🌍 for Global Markets, 📈 for Stocks, 🇨🇭 for Swiss Jobs).
     
     Your short briefing MUST seamlessly combine and cover:
     1. Global Market Trends
     2. Specific Stocks (Buy/Sell/Watch Signals)
     3. The Swiss Engineering Job Market
 
-    Keep it extremely brief, punchy, and formatted well for a mobile phone message. You must ONLY use the following recent news to write the report. Do not hallucinate data.
+    Keep it extremely brief and punchy. You must ONLY use the following recent news to write the report. Do not hallucinate data.
     
     Raw News Data:
     {state["raw_research"]}
     
-    Return ONLY the Markdown report text.
+    Return ONLY the final message text.
     """
     draft = ask_llm(prompt)
     return {"draft_report": draft.strip()}
@@ -89,14 +94,15 @@ def editor_node(state: AgentState):
     
     CRITICAL REQUIREMENTS:
     1. It MUST be short (only 1 or 2 paragraphs).
-    2. It MUST explicitly mention specific stocks with buy/watch/sell context.
-    3. It MUST explicitly discuss the engineering job market in Switzerland.
+    2. It MUST NOT contain any Markdown headers (###) or bullet points (-). It should use emojis instead.
+    3. It MUST explicitly mention specific stocks with buy/watch/sell context.
+    4. It MUST explicitly discuss the engineering job market in Switzerland.
     
     Draft Report:
     {state["draft_report"]}
     
-    If the report meets ALL requirements and uses data, reply with EXACTLY the word: APPROVED
-    If the report is too long, missing specific stock tickers, or missing Swiss engineering news, reply with the word: REJECTED followed by a specific search query the Searcher should use next.
+    If the report meets ALL requirements, reply with EXACTLY the word: APPROVED
+    If the report uses Markdown headers, is too long, or misses specific stock/Swiss data, reply with the word: REJECTED followed by feedback on what to fix or a specific search query the Searcher should use next.
     """
     review = ask_llm(prompt).strip()
     
@@ -142,12 +148,15 @@ def save_node(state: AgentState):
             print("   -> Attempting to send Telegram message...")
             url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
             text_to_send = state["draft_report"][:4090] 
-            payload = {"chat_id": telegram_chat_id, "text": text_to_send, "parse_mode": "Markdown"}
+            
+            # Removed parse_mode="Markdown" since we want raw text + emojis to render cleanly without syntax errors
+            payload = {"chat_id": telegram_chat_id, "text": text_to_send}
+            
             response = requests.post(url, json=payload)
-            if response.status_code != 200:
-                payload.pop("parse_mode")
-                requests.post(url, json=payload)
-            print("   -> 📱 Telegram message sent successfully!")
+            if response.status_code == 200:
+                print("   -> 📱 Telegram message sent successfully!")
+            else:
+                print(f"   -> ❌ Telegram API Error: {response.text}")
         except Exception as e:
             print(f"   -> ❌ Failed to send Telegram message: {e}")
         
