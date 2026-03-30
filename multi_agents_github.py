@@ -65,11 +65,13 @@ def analyst_node(state: AgentState):
     
     prompt = f"""
     You are an expert Financial and Career Analyst. Today is {today}. 
-    Write a highly concise, 1 to 2 paragraph daily briefing about: '{state["topic"]}'.
+    Write a highly concise, 2 to 3 paragraph daily briefing about: '{state["topic"]}'.
     
     CRITICAL FORMATTING RULES:
-    - DO NOT use Markdown headers (like ###) or horizontal rules (like ---).
-    - DO NOT use bullet points. 
+    - DO NOT use ANY Markdown formatting.
+    - NO bolding with asterisks (like **this**).
+    - NO headers (like ###) or horizontal rules (like ---).
+    - NO bullet points. 
     - USE EMOJIS naturally within the text to separate ideas and make it visually appealing for a mobile chat (e.g., 🌍 for Global Markets, 📈 for Stocks, 🇨🇭 for Swiss Jobs).
     
     Your short briefing MUST seamlessly combine and cover:
@@ -93,8 +95,8 @@ def editor_node(state: AgentState):
     You are a strict Editor. Review this draft report.
     
     CRITICAL REQUIREMENTS:
-    1. It MUST be short (only 1 or 2 paragraphs).
-    2. It MUST NOT contain any Markdown headers (###) or bullet points (-). It should use emojis instead.
+    1. It MUST be short (only 2 or 3 paragraphs).
+    2. It MUST NOT contain any Markdown formatting whatsoever (no headers like ###, no bullet points -, and absolutely no bolding with **). It should be pure plain text with emojis.
     3. It MUST explicitly mention specific stocks with buy/watch/sell context.
     4. It MUST explicitly discuss the engineering job market in Switzerland.
     
@@ -102,7 +104,7 @@ def editor_node(state: AgentState):
     {state["draft_report"]}
     
     If the report meets ALL requirements, reply with EXACTLY the word: APPROVED
-    If the report uses Markdown headers, is too long, or misses specific stock/Swiss data, reply with the word: REJECTED followed by feedback on what to fix or a specific search query the Searcher should use next.
+    If the report uses any asterisks (**), Markdown headers, is too long, or misses specific stock/Swiss data, reply with the word: REJECTED followed by feedback on what to fix or a specific search query the Searcher should use next.
     """
     review = ask_llm(prompt).strip()
     
@@ -117,28 +119,6 @@ def editor_node(state: AgentState):
 def save_node(state: AgentState):
     print("\n💾 SAVING: Dispatching Notifications...")
     
-    # Email Delivery - COMMENTED OUT
-    # sender_email = os.environ.get("SENDER_EMAIL")
-    # sender_password = os.environ.get("SENDER_PASSWORD")
-    # receiver_email = os.environ.get("RECEIVER_EMAIL")
-    # 
-    # if sender_email and sender_password and receiver_email:
-    #     try:
-    #         print("   -> Attempting to send email...")
-    #         msg = MIMEMultipart()
-    #         msg['From'] = sender_email
-    #         msg['To'] = receiver_email
-    #         msg['Subject'] = f"Swiss Engineering & Global Markets Daily Briefing"
-    #         msg.attach(MIMEText(state["draft_report"], 'plain'))
-    #         server = smtplib.SMTP('smtp.gmail.com', 587)
-    #         server.starttls()
-    #         server.login(sender_email, sender_password)
-    #         server.send_message(msg)
-    #         server.quit()
-    #         print("   -> 📧 Email sent successfully!")
-    #     except Exception as e:
-    #         print(f"   -> ❌ Failed to send email: {e}")
-
     # Telegram Delivery
     telegram_token = os.environ.get("TELEGRAM_TOKEN")
     telegram_chat_id = os.environ.get("TELEGRAM_CHAT_ID")
@@ -149,7 +129,6 @@ def save_node(state: AgentState):
             url = f"https://api.telegram.org/bot{telegram_token}/sendMessage"
             text_to_send = state["draft_report"][:4090] 
             
-            # Removed parse_mode="Markdown" since we want raw text + emojis to render cleanly without syntax errors
             payload = {"chat_id": telegram_chat_id, "text": text_to_send}
             
             response = requests.post(url, json=payload)
