@@ -18,7 +18,6 @@ def send_cat_gif():
         payload = {
             "chat_id": chat_id,
             "animation": gif_url,
-            "caption": "🐾 1:00 PM Cat Break! 🐾"
         }
         
         res = requests.post(telegram_url, json=payload)
