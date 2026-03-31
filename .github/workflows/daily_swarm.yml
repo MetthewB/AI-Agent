@@ -2,11 +2,15 @@ name: Daily Finance & Job Market Swarm
 
 on:
   schedule:
+    # 08:00 UTC = 10:00 AM Switzerland (Finance Swarm)
     - cron: '0 8 * * *'
+    # 11:00 UTC = 01:00 PM Switzerland (Cat GIF)
+    - cron: '0 11 * * *'
   workflow_dispatch:
 
 jobs:
   run-ai-swarm:
+    if: github.event.schedule == '0 8 * * *' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
@@ -26,10 +30,30 @@ jobs:
       - name: Run Multi-Agent Swarm
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
-          SENDER_EMAIL: ${{ secrets.SENDER_EMAIL }}
-          SENDER_PASSWORD: ${{ secrets.SENDER_PASSWORD }}
-          RECEIVER_EMAIL: ${{ secrets.RECEIVER_EMAIL }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
         run: |
           python multi_agents_github.py
+
+  run-cat-break:
+    if: github.event.schedule == '0 11 * * *' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install Requests
+        run: pip install requests
+
+      - name: Run Cat Script
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          python cat_gif.py
