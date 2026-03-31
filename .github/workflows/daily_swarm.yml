@@ -23,7 +23,7 @@ jobs:
 
       - name: Install Dependencies
         run: |
-          pip install langgraph langchain-huggingface ddgs requests
+          pip install -r requirements.txt
 
       - name: Run Multi-Agent Swarm
         env:

@@ -1,10 +1,8 @@
 import os
 from datetime import datetime
 from typing import TypedDict
-import smtplib
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import requests
+import yfinance as yf
 from langgraph.graph import StateGraph, END
 from huggingface_hub import InferenceClient
 from ddgs import DDGS
@@ -28,6 +26,7 @@ def ask_llm(prompt: str) -> str:
 class AgentState(TypedDict):
     topic: str
     raw_research: str
+    portfolio_data: str  # <--- Added to hold our live stock data
     draft_report: str
     feedback: str
     status: str  
@@ -41,6 +40,7 @@ def searcher_node(state: AgentState):
         print(f"   -> Adjusting search based on feedback: {state['feedback']}")
         query = state['feedback']
 
+    # 1. Gather Web News
     try:
         results = DDGS().news(query, timelimit="d", max_results=5)
         if not results:
@@ -57,7 +57,28 @@ def searcher_node(state: AgentState):
             snippets = "The search engine blocked the request. Please provide general macro analysis."
         
     new_research = state["raw_research"] + "\n" + snippets
-    return {"raw_research": new_research}
+
+    # 2. Gather Live Portfolio Data (Only runs once to save time)
+    portfolio_data = state.get("portfolio_data", "")
+    if not portfolio_data:
+        print("   -> Fetching live portfolio data from yfinance...")
+        # Add your personal stocks to this list! (.SW is for the Swiss Exchange)
+        tickers = ["AAPL", "NVDA", "ABBN.SW", "ROG.SW"] 
+        stats = []
+        for t in tickers:
+            try:
+                hist = yf.Ticker(t).history(period="2d")
+                if len(hist) >= 2:
+                    current = hist['Close'].iloc[-1]
+                    prev = hist['Close'].iloc[-2]
+                    pct = ((current - prev) / prev) * 100
+                    # Formats like: AAPL: 175.50 (+1.25%)
+                    stats.append(f"{t}: {current:.2f} ({pct:+.2f}%)")
+            except:
+                pass
+        portfolio_data = "USER PORTFOLIO DATA: " + " | ".join(stats)
+
+    return {"raw_research": new_research, "portfolio_data": portfolio_data}
 
 def analyst_node(state: AgentState):
     print("\n✍️ ANALYST: Writing the report...")
@@ -72,17 +93,20 @@ def analyst_node(state: AgentState):
     - NO bolding with asterisks (like **this**).
     - NO headers (like ###) or horizontal rules (like ---).
     - NO bullet points. 
-    - USE EMOJIS naturally within the text to separate ideas and make it visually appealing for a mobile chat (e.g., 🌍 for Global Markets, 📈 for Stocks, 🇨🇭 for Swiss Jobs).
+    - USE EMOJIS naturally within the text to separate ideas and make it visually appealing for a mobile chat.
     
     Your short briefing MUST seamlessly combine and cover:
     1. Global Market Trends
-    2. Specific Stocks (Buy/Sell/Watch Signals)
+    2. An update on the USER PORTFOLIO using the exact numbers provided below.
     3. The Swiss Engineering Job Market
 
-    Keep it extremely brief and punchy. You must ONLY use the following recent news to write the report. Do not hallucinate data.
+    Keep it extremely brief and punchy. You must ONLY use the provided data. Do not hallucinate.
     
     Raw News Data:
     {state["raw_research"]}
+
+    Live User Portfolio Data:
+    {state["portfolio_data"]}
     
     Return ONLY the final message text.
     """
@@ -97,14 +121,14 @@ def editor_node(state: AgentState):
     CRITICAL REQUIREMENTS:
     1. It MUST be short (only 2 or 3 paragraphs).
     2. It MUST NOT contain any Markdown formatting whatsoever (no headers like ###, no bullet points -, and absolutely no bolding with **). It should be pure plain text with emojis.
-    3. It MUST explicitly mention specific stocks with buy/watch/sell context.
+    3. It MUST explicitly mention the user's specific portfolio stocks and their daily performance numbers.
     4. It MUST explicitly discuss the engineering job market in Switzerland.
     
     Draft Report:
     {state["draft_report"]}
     
     If the report meets ALL requirements, reply with EXACTLY the word: APPROVED
-    If the report uses any asterisks (**), Markdown headers, is too long, or misses specific stock/Swiss data, reply with the word: REJECTED followed by feedback on what to fix or a specific search query the Searcher should use next.
+    If the report uses any asterisks (**), Markdown formatting, is too long, or misses the portfolio/Swiss data, reply with the word: REJECTED followed by feedback on what to fix.
     """
     review = ask_llm(prompt).strip()
     
@@ -164,5 +188,6 @@ app = workflow.compile()
 if __name__ == "__main__":
     topic = "Global stock market trends, specific stocks to buy/sell, and the engineering job market in Switzerland"
     print(f"\n🚀 Starting GitHub Actions Swarm for: {topic}")
-    app.invoke({"topic": topic, "raw_research": "", "draft_report": "", "feedback": "", "status": "", "revision_count": 0})
+    # Note: portfolio_data starts as an empty string, the searcher_node will fill it!
+    app.invoke({"topic": topic, "raw_research": "", "portfolio_data": "", "draft_report": "", "feedback": "", "status": "", "revision_count": 0})
     print("\n✅ Serverless Pipeline complete.")

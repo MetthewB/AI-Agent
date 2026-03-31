@@ -3,3 +3,4 @@ langchain-huggingface
 ddgs
 pymongo
 requests
+yfinance
