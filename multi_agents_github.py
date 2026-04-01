@@ -26,7 +26,7 @@ def ask_llm(prompt: str) -> str:
 class AgentState(TypedDict):
     topic: str
     raw_research: str
-    portfolio_data: str  # <--- Added to hold our live stock data
+    portfolio_data: str
     draft_report: str
     feedback: str
     status: str  
@@ -49,31 +49,36 @@ def searcher_node(state: AgentState):
         snippets = "\n".join([f"- [{r.get('date', 'Recent')}] {r.get('title', '')}: {r.get('body', '')}" for r in results])
     except Exception as e:
         print(f"   -> Search API Error: {e}")
-        print("   -> Attempting unfiltered emergency web search...")
         try:
             results = DDGS().text(query, max_results=3)
             snippets = "\n".join([f"- {r.get('title', '')}: {r.get('body', '')}" for r in results])
         except:
-            snippets = "The search engine blocked the request. Please provide general macro analysis."
+            snippets = "The search engine blocked the request."
         
     new_research = state["raw_research"] + "\n" + snippets
 
-    # 2. Gather Live Portfolio Data (Only runs once to save time)
+    # 2. Gather Live Portfolio Data
     portfolio_data = state.get("portfolio_data", "")
     if not portfolio_data:
         print("   -> Fetching live portfolio data from yfinance...")
-        # Add your personal stocks to this list! (.SW is for the Swiss Exchange)
-        tickers = ["AAPL", "NVDA", "ABBN.SW", "ROG.SW"] 
+        
+        # Mapped your specific ETFs to Yahoo Finance tickers
+        portfolio_map = {
+            "EUNL.DE": "MSCI World (EUNL)",
+            "EUNM.DE": "MSCI Emerging Mkts (EUNM)",
+            "ACM9.DE": "MSCI World SRI (ACM9)",
+            "XAUUSD=X": "Gold (XAU)"
+        }
+        
         stats = []
-        for t in tickers:
+        for ticker, name in portfolio_map.items():
             try:
-                hist = yf.Ticker(t).history(period="2d")
+                hist = yf.Ticker(ticker).history(period="2d")
                 if len(hist) >= 2:
                     current = hist['Close'].iloc[-1]
                     prev = hist['Close'].iloc[-2]
                     pct = ((current - prev) / prev) * 100
-                    # Formats like: AAPL: 175.50 (+1.25%)
-                    stats.append(f"{t}: {current:.2f} ({pct:+.2f}%)")
+                    stats.append(f"{name}: {current:.2f} ({pct:+.2f}%)")
             except:
                 pass
         portfolio_data = "USER PORTFOLIO DATA: " + " | ".join(stats)
@@ -85,19 +90,17 @@ def analyst_node(state: AgentState):
     today = datetime.now().strftime("%A, %B %d, %Y")
     
     prompt = f"""
-    You are an expert Financial and Career Analyst. Today is {today}. 
+    You are an expert Financial Analyst. Today is {today}. 
     Write a highly concise, 2 to 3 paragraph daily briefing about: '{state["topic"]}'.
     
     CRITICAL FORMATTING RULES:
-    - DO NOT use ANY Markdown formatting.
-    - NO bolding with asterisks (like **this**).
-    - NO headers (like ###) or horizontal rules (like ---).
-    - NO bullet points. 
-    - USE EMOJIS naturally within the text to separate ideas and make it visually appealing for a mobile chat.
+    - NEVER use the asterisk character (*) anywhere in your response.
+    - DO NOT use ANY Markdown formatting (no headers, no bolding, no italics, no bullet points).
+    - USE EMOJIS naturally within the text to separate ideas.
     
     Your short briefing MUST seamlessly combine and cover:
     1. Global Market Trends
-    2. An update on the USER PORTFOLIO using the exact numbers provided below.
+    2. An update on the USER PORTFOLIO using the exact numbers provided below. Do not mention stocks outside this list.
     3. The Swiss Engineering Job Market
 
     Keep it extremely brief and punchy. You must ONLY use the provided data. Do not hallucinate.
@@ -120,15 +123,15 @@ def editor_node(state: AgentState):
     
     CRITICAL REQUIREMENTS:
     1. It MUST be short (only 2 or 3 paragraphs).
-    2. It MUST NOT contain any Markdown formatting whatsoever (no headers like ###, no bullet points -, and absolutely no bolding with **). It should be pure plain text with emojis.
-    3. It MUST explicitly mention the user's specific portfolio stocks and their daily performance numbers.
+    2. It MUST NOT contain any asterisks (*), markdown headers, or bullet points. Pure plain text with emojis.
+    3. It MUST explicitly mention the user's specific portfolio (EUNL, EUNM, ACM9, Gold) and their performance numbers.
     4. It MUST explicitly discuss the engineering job market in Switzerland.
     
     Draft Report:
     {state["draft_report"]}
     
     If the report meets ALL requirements, reply with EXACTLY the word: APPROVED
-    If the report uses any asterisks (**), Markdown formatting, is too long, or misses the portfolio/Swiss data, reply with the word: REJECTED followed by feedback on what to fix.
+    If the report uses any asterisks (*), is too long, or misses the portfolio/Swiss data, reply with the word: REJECTED followed by feedback on what to fix.
     """
     review = ask_llm(prompt).strip()
     
