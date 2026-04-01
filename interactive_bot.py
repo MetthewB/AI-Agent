@@ -22,10 +22,12 @@ PORTFOLIO_MAP = {
 # --- Fake Web Server to keep Render & Cron-job happy ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        message = b"OK"
         self.send_response(200)
         self.send_header('Content-type', 'text/plain')
+        self.send_header('Content-Length', str(len(message)))
         self.end_headers()
-        self.wfile.write(b"Bot is alive and kicking!")
+        self.wfile.write(message)
 
 def run_health_check():
     port = int(os.environ.get("PORT", 10000)) 
