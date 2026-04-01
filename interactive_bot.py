@@ -71,15 +71,35 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
-    await update.message.reply_text("Checking Lausanne weather... 🌡️")
+    
+    await update.message.reply_text("🌡️ Checking the Lausanne sky...")
+    
+    # Lausanne coordinates
+    lat, lon = 46.5197, 6.6323
+    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+    
     try:
-        url = "https://api.open-meteo.com/v1/forecast?latitude=46.5197&longitude=6.6323&current_weather=true"
-        res = requests.get(url).json()
+        res = requests.get(url, timeout=10).json()
         current = res['current_weather']
         temp = current['temperature']
-        await update.message.reply_text(f"It is currently {temp}°C in Lausanne. 🏔️")
-    except:
-        await update.message.reply_text("⚠️ Weather service is temporarily down.")
+        code = current['weathercode']
+        
+        # Mapping WMO codes to human-friendly descriptions
+        wmo_map = {
+            0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+            45: "Foggy", 48: "Foggy", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
+            61: "Light rain", 63: "Moderate rain", 65: "Heavy rain",
+            71: "Light snow", 73: "Moderate snow", 75: "Heavy snow",
+            80: "Light showers", 81: "Moderate showers", 82: "Heavy showers",
+            95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Heavy thunderstorm"
+        }
+        
+        condition = wmo_map.get(code, "Mixed weather")
+        await update.message.reply_text(f"It is currently {temp}°C in Lausanne with {condition.lower()}. 🏔️")
+        
+    except Exception as e:
+        logger.error(f"Weather Command Error: {e}")
+        await update.message.reply_text("⚠️ Weather data is temporarily unavailable. Check the window! 🪟")
 
 async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
@@ -133,7 +153,7 @@ async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     try:
         res = requests.get("https://api.thecatapi.com/v1/images/search?mime_types=gif", timeout=10).json()
-        await update.message.reply_animation(res[0]['url'], caption="Voila! 🐾")
+        await update.message.reply_animation(res[0]['url'])
     except:
         await update.message.reply_text("The cats are sleeping. 😴")
 
