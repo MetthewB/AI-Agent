@@ -37,34 +37,41 @@ def run_health_check():
 
 # --- Security Helper ---
 def is_authorized(update: Update) -> bool:
-    """Check if the person messaging the bot is actually you."""
-    return update.effective_chat.id == AUTHORIZED_USER
+    """Check if the person messaging the bot is actually you, safely."""
+    try:
+        # Get your ID from Render, strip any accidental spaces/newlines
+        raw_env_id = os.environ.get("TELEGRAM_CHAT_ID", "")
+        clean_env_id = "".join(filter(str.isdigit, raw_env_id))
+        
+        if not clean_env_id:
+            return False
+            
+        return update.effective_chat.id == int(clean_env_id)
+    except Exception as e:
+        print(f"Auth Error: {e}")
+        return False
 
 # --- Commands ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update):
-        # Let's crack this mystery open.
-        bot_sees_id = update.effective_chat.id
-        env_var_sees = os.environ.get("TELEGRAM_CHAT_ID", "NOT FOUND")
-        
-        diagnostic_msg = (
-            f"🛑 Access Denied.\n\n"
-            f"1. Your actual Telegram ID is: {bot_sees_id}\n"
-            f"2. Render thinks your ID is: '{env_var_sees}'\n\n"
-            f"If line 2 says 'NOT FOUND', Render isn't reading your variable.\n"
-            f"If the numbers look identical, check for hidden spaces inside the quotes!"
+    try:
+        if not is_authorized(update):
+            bot_sees = update.effective_chat.id
+            env_sees = os.environ.get("TELEGRAM_CHAT_ID", "NOT FOUND")
+            await update.message.reply_text(
+                f"🛑 Access Denied.\nYour ID: {bot_sees}\nRender sees: '{env_sees}'"
+            )
+            return
+
+        welcome_text = (
+            "Hello Matthew! I am Mattou bot, meow.\n\n"
+            "Commands:\n"
+            "/portfolio - Live status of EUNL, EUNM, ACM9, Gold\n"
+            "/news - Quick world & Swiss geopolitics update\n"
+            "/cat - Instant cat GIF break 🐾"
         )
-        await update.message.reply_text(diagnostic_msg)
-        return
-        
-    welcome_text = (
-        "Bonjour Matthew! 🇨🇭 I am your Lausanne Assistant.\n\n"
-        "Commands:\n"
-        "/portfolio - Live status of EUNL, EUNM, ACM9, Gold\n"
-        "/news - Quick world & Swiss geopolitics update\n"
-        "/cat - Instant cat GIF break 🐾"
-    )
-    await update.message.reply_text(welcome_text)
+        await update.message.reply_text(welcome_text)
+    except Exception as e:
+        print(f"Start Command Error: {e}")
 
 async def portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
