@@ -16,7 +16,21 @@ def get_weather(lat=46.5197, lon=6.6323):
         res = requests.get(url).json()
         current = res['current_weather']
         temp = current['temperature']
-        return f"{temp}°C"
+        code = current['weathercode']
+        
+        # Open-Meteo WMO Weather codes mapping
+        wmo_map = {
+            0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+            45: "Foggy", 48: "Foggy", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
+            61: "Light rain", 63: "Moderate rain", 65: "Heavy rain",
+            71: "Light snow", 73: "Moderate snow", 75: "Heavy snow",
+            80: "Light showers", 81: "Moderate showers", 82: "Heavy showers",
+            95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Heavy thunderstorm"
+        }
+        
+        condition = wmo_map.get(code, "Mixed weather")
+        return f"{temp}°C and {condition}"
+        
     except Exception as e:
         print(f"Weather Error: {e}")
         return "Weather data temporarily unavailable"
@@ -30,7 +44,6 @@ def get_top_news():
     
     for q in queries:
         try:
-            # We fetch just the top 2 news items per region to keep the context clean
             results = DDGS().news(q, timelimit="d", max_results=2)
             for r in results:
                 news_snippets.append(f"{r.get('title')}: {r.get('body')}")
@@ -50,24 +63,24 @@ def send_telegram(text):
 
 def generate_dashboard():
     print("🌅 Building Morning Dashboard...")
-    weather_temp = get_weather() 
+    weather_info = get_weather() 
     news_data = get_top_news()
     today = datetime.now().strftime("%A, %B %d, %Y")
     
     prompt = f"""
-    You are a sharp, highly efficient Executive Assistant. Write a fast, direct morning briefing for {today}.
+    You are a helpful personal assistant. Write a morning briefing for {today}.
     
-    The current temperature in Lausanne is {weather_temp}.
+    The current weather in Lausanne is: {weather_info}.
     
     Here is the latest major news from the World, Switzerland, and France:
     {news_data}
     
     RULES:
-    - Get straight to the point. NO flowery language, NO "Dear Guest", NO fluff.
-    - Start directly with the weather and a brief, 2-sentence news summary.
-    - End with a quick schedule reminder: 10:00 AM Finance Swarm 📈 | 1:00 PM Cat Break 🐾.
-    - Use elegant emojis naturally (🇨🇭, 🇫🇷, 🌍, ☕).
-    - ABSOLUTELY NO MARKDOWN. Do not use a single asterisk (*), underscore (_), header (#), or bullet point (-). Pure plain text.
+    - Speak normally and conversationally. Just act like a normal human assistant.
+    - Start with a hello and the Lausanne weather.
+    - Give a brief, easy-to-read summary of the news (first world news, then swiss news, lastly french news).
+    - Use emojis naturally to make it visually pleasant.
+    - ABSOLUTELY NO MARKDOWN. Do not use a single asterisk (*), underscore (_), header (#), or bullet point (-). Just pure plain text with emojis.
     """
     
     try:
