@@ -2,106 +2,98 @@ import os
 import requests
 import yfinance as yf
 import threading
+import logging
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 
-# --- Constants ---
+# --- Configuration ---
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
-# Grab your Chat ID to make sure no one else can use your bot!
-AUTHORIZED_USER = int(os.environ.get("TELEGRAM_CHAT_ID", 0)) 
+CHAT_ID_ENV = os.environ.get("TELEGRAM_CHAT_ID", "0")
+# Clean the ID once at startup
+AUTHORIZED_USER = int("".join(filter(str.isdigit, CHAT_ID_ENV)))
 
 PORTFOLIO_MAP = {
     "EUNL.DE": "MSCI World (EUNL)",
     "EUNM.DE": "MSCI Emerging Mkts (EUNM)",
     "ACM9.DE": "MSCI World SRI (ACM9)",
-    "XAUUSD=X": "Gold (XAU)"
+    "GC=F": "Gold (XAU)"
 }
 
-# --- Fake Web Server to keep Render & Cron-job happy ---
+# --- Logging Setup ---
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+# --- Health Check Server (Keep-Alive) ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
-        message = b"OK"
         self.send_response(200)
         self.send_header('Content-type', 'text/plain')
-        self.send_header('Content-Length', str(len(message)))
+        self.send_header('Content-Length', '2')
         self.end_headers()
-        self.wfile.write(message)
+        self.wfile.write(b"OK")
+
+    def log_message(self, format, *args):
+        return # Silent logs to keep Render console clean
 
 def run_health_check():
     port = int(os.environ.get("PORT", 10000)) 
     server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
-    print(f"🌍 Web server listening on port {port}...")
+    logger.info(f"🌍 Health check server active on port {port}")
     server.serve_forever()
 
-# --- Security Helper ---
+# --- Helpers ---
 def is_authorized(update: Update) -> bool:
-    """Check if the person messaging the bot is actually you, safely."""
-    try:
-        # Get your ID from Render, strip any accidental spaces/newlines
-        raw_env_id = os.environ.get("TELEGRAM_CHAT_ID", "")
-        clean_env_id = "".join(filter(str.isdigit, raw_env_id))
-        
-        if not clean_env_id:
-            return False
-            
-        return update.effective_chat.id == int(clean_env_id)
-    except Exception as e:
-        print(f"Auth Error: {e}")
-        return False
+    return update.effective_chat.id == AUTHORIZED_USER
 
-# --- Commands ---
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    try:
-        if not is_authorized(update):
-            bot_sees = update.effective_chat.id
-            env_sees = os.environ.get("TELEGRAM_CHAT_ID", "NOT FOUND")
-            await update.message.reply_text(
-                f"🛑 Access Denied.\nYour ID: {bot_sees}\nRender sees: '{env_sees}'"
-            )
-            return
+# --- Command Handlers ---
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update):
+        logger.warning(f"Unauthorized access attempt by ID: {update.effective_chat.id}")
+        await update.message.reply_text(f"🛑 Access Denied.\nYour ID: {update.effective_chat.id}")
+        return
 
-        welcome_text = (
-            "Hello Matthew! I am Mattou bot, meow.\n\n"
-            "Commands:\n"
-            "/portfolio - Live status of EUNL, EUNM, ACM9, Gold\n"
-            "/news - Quick world & Swiss geopolitics update\n"
-            "/cat - Instant cat GIF break 🐾"
-        )
-        await update.message.reply_text(welcome_text)
-    except Exception as e:
-        print(f"Start Command Error: {e}")
+    welcome = (
+        "Hello Matthew! I am Mattou bot, meow. 🐾\n\n"
+        "How can I help you today?\n"
+        "/portfolio - Live market status\n"
+        "/news - Global & Swiss headlines\n"
+        "/cat - Instant cat GIF break"
+    )
+    await update.message.reply_text(welcome)
 
-async def portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     
-    await update.message.reply_text("Checking the markets... ⏳")
+    await update.message.reply_text("📊 Fetching market data...")
     stats = []
+    
     for ticker, name in PORTFOLIO_MAP.items():
         try:
-            # yfinance handles its own internal timeouts gracefully
             data = yf.Ticker(ticker).history(period="2d")
+            if data.empty:
+                raise ValueError("No data found")
+            
             current = data['Close'].iloc[-1]
             prev = data['Close'].iloc[-2]
             pct = ((current - prev) / prev) * 100
-            stats.append(f"{name}: {current:.2f} ({pct:+.2f}%)")
+            stats.append(f"• {name}: {current:.2f} ({pct:+.2f}%)")
         except Exception as e:
-            stats.append(f"⚠️ Error fetching {name}")
-            print(f"Portfolio error for {ticker}: {e}")
+            stats.append(f"• {name}: ⚠️ Data unavailable")
+            logger.error(f"Error fetching {ticker}: {e}")
     
-    response = "📈 Live Portfolio:\n" + "\n".join(stats)
-    await update.message.reply_text(response)
+    await update.message.reply_text("📈 Live Portfolio:\n" + "\n".join(stats))
 
-async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     
-    await update.message.reply_text("Scanning headlines... 🌍")
+    await update.message.reply_text("🌍 Scanning headlines...")
     try:
-        # 1. Use Google News RSS to bypass IP blocks
         url = "https://news.google.com/rss/search?q=geopolitics+Switzerland+France+when:1d&hl=en-US&gl=US&ceid=US:en"
-        
-        # 2. Strict 10-second timeout
         res = requests.get(url, timeout=10)
         soup = BeautifulSoup(res.content, "xml") 
         items = soup.find_all("item", limit=3)
@@ -113,39 +105,36 @@ async def news(update: Update, context: ContextTypes.DEFAULT_TYPE):
             response = "📰 No major events found in the last 24 hours."
             
         await update.message.reply_text(response)
-        
-    except requests.exceptions.Timeout:
-        await update.message.reply_text("⚠️ News servers are responding too slowly right now. Try again later.")
     except Exception as e:
-        await update.message.reply_text("⚠️ Could not fetch the news at this moment.")
-        print(f"News fetch error: {e}")
+        logger.error(f"News error: {e}")
+        await update.message.reply_text("⚠️ Could not fetch news. Try again later.")
 
-async def cat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     
     try:
-        # Added strict 10-second timeout here as well!
         res = requests.get("https://api.thecatapi.com/v1/images/search?mime_types=gif", timeout=10).json()
         await update.message.reply_animation(res[0]['url'], caption="Voila! 🐾")
-    except requests.exceptions.Timeout:
-        await update.message.reply_text("⚠️ The cat API took too long to respond.")
     except Exception as e:
+        logger.error(f"Cat error: {e}")
         await update.message.reply_text("The cats are sleeping. 😴")
-        print(f"Cat fetch error: {e}")
 
-# --- Main Setup ---
+# --- Main ---
 if __name__ == "__main__":
+    # Start Keep-Alive Server
     threading.Thread(target=run_health_check, daemon=True).start()
     
     if not TOKEN:
-        print("❌ No Telegram Token found! Check Render Environment Variables.")
+        logger.error("TELEGRAM_TOKEN not found in environment!")
     else:
-        print("🤖 Telegram Bot is waking up...")
+        logger.info("🤖 Mattou Bot is starting...")
         app = Application.builder().token(TOKEN).build()
         
-        app.add_handler(CommandHandler("start", start))
-        app.add_handler(CommandHandler("portfolio", portfolio))
-        app.add_handler(CommandHandler("news", news))
-        app.add_handler(CommandHandler("cat", cat))
+        # Add Handlers
+        app.add_handler(CommandHandler("start", start_command))
+        app.add_handler(CommandHandler("portfolio", portfolio_command))
+        app.add_handler(CommandHandler("news", news_command))
+        app.add_handler(CommandHandler("cat", cat_command))
         
+        # Start Polling
         app.run_polling()
