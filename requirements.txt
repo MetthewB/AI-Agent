@@ -1,6 +1,6 @@
 langgraph
 langchain-huggingface
 ddgs
-pymongo
+#pymongo
 requests
 yfinance
