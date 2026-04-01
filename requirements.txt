@@ -4,3 +4,5 @@ ddgs
 #pymongo
 requests
 yfinance
+icalevents
+pytz

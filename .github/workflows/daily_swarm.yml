@@ -34,6 +34,7 @@ jobs:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          APPLE_CALENDAR_URL: ${{ secrets.APPLE_CALENDAR_URL }}
         run: |
           python morning_dashboard.py
 
