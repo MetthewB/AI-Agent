@@ -6,3 +6,4 @@ requests
 yfinance
 icalevents
 pytz
+python-telegram-bot
