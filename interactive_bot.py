@@ -58,7 +58,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     welcome = (
-        "Hello Matthew! I am Mattou bot, meow. 🐾\n\n"
+        "Hello! I am Mattou bot, meow.\n\n"
         "How can I help you today?\n"
         "/portfolio - Live market status\n"
         "/news - Global & Swiss headlines\n"
@@ -97,46 +97,55 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await update.message.reply_text("🌍 Scanning regional headlines...")
     
-    # We will search for 3 specific areas to get a better mix
     queries = [
         ("GLOBAL", "geopolitics+world+news"),
-        ("SWISS", "geopolitics+Switzerland"),
+        ("SWITZERLAND", "geopolitics+Switzerland"),
         ("FRANCE", "geopolitics+France")
     ]
     
-    response_lines = ["📰 **Latest Major Events**", ""]
+    response_lines = ["📰 Latest Major Events", ""]
+    seen_titles = set()
     
     try:
         for region, q in queries:
             url = f"https://news.google.com/rss/search?q={q}+when:1d&hl=en-US&gl=US&ceid=US:en"
             res = requests.get(url, timeout=10)
             soup = BeautifulSoup(res.content, "xml")
-            item = soup.find("item") # Just take the top 1 for each region
+            items = soup.find_all("item")
             
-            if item:
-                # Clean up the title (remove the " - Source Name" at the end)
-                full_title = item.title.text
-                clean_title = full_title.split(" - ")[0]
+            region_added = 0
+            temp_lines = [f"📍 {region}"]
+            
+            for item in items:
+                if region_added >= 2: break
                 
-                # Truncate if it's still way too long (over 100 chars)
-                if len(clean_title) > 100:
-                    clean_title = clean_title[:97] + "..."
+                full_title = item.title.text.split(" - ")[0].strip()
                 
-                response_lines.append(f"📍 {region}")
-                response_lines.append(f"{clean_title}")
-                response_lines.append("") # Empty line for spacing
+                if len(full_title) < 15 or "shownews" in full_title.lower():
+                    continue
+                
+                title_fingerprint = full_title[:20].lower()
+                if title_fingerprint in seen_titles:
+                    continue
+                
+                clean_title = full_title[:87] + "..." if len(full_title) > 90 else full_title
+                temp_lines.append(f"• {clean_title}")
+                seen_titles.add(title_fingerprint)
+                region_added += 1
+            
+            if region_added > 0:
+                response_lines.extend(temp_lines)
+                response_lines.append("")
         
-        final_response = "\n".join(response_lines)
-        if len(response_lines) <= 2:
-            final_response = "📰 No major events found in the last 24 hours."
+        final_response = "\n".join(response_lines).strip()
+        if not seen_titles:
+            final_response = "📰 No coherent news found in the last 24 hours."
 
-        # REMINDER: We are using NO MARKDOWN for consistency with your earlier rules
-        # If you want bold headers, you can use them, but here I've kept it plain text
-        await update.message.reply_text(final_response.replace("**", ""))
+        await update.message.reply_text(final_response)
         
     except Exception as e:
         logger.error(f"News error: {e}")
-        await update.message.reply_text("⚠️ News servers are busy. Please try again in a moment.")
+        await update.message.reply_text("⚠️ News servers are busy. Please try again later.")
 
 async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
