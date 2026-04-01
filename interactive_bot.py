@@ -43,7 +43,18 @@ def is_authorized(update: Update) -> bool:
 # --- Commands ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update):
-        await update.message.reply_text("🛑 Access Denied.")
+        # Let's crack this mystery open.
+        bot_sees_id = update.effective_chat.id
+        env_var_sees = os.environ.get("TELEGRAM_CHAT_ID", "NOT FOUND")
+        
+        diagnostic_msg = (
+            f"🛑 Access Denied.\n\n"
+            f"1. Your actual Telegram ID is: {bot_sees_id}\n"
+            f"2. Render thinks your ID is: '{env_var_sees}'\n\n"
+            f"If line 2 says 'NOT FOUND', Render isn't reading your variable.\n"
+            f"If the numbers look identical, check for hidden spaces inside the quotes!"
+        )
+        await update.message.reply_text(diagnostic_msg)
         return
         
     welcome_text = (
