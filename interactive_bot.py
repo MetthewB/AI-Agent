@@ -41,11 +41,13 @@ def ask_llm(prompt: str) -> str:
 # --- Health Check Server ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
+        response_content = b"OK"
         self.send_response(200)
         self.send_header('Content-type', 'text/plain')
-        self.send_header('Content-Length', '2')
+        self.send_header('Content-Length', str(len(response_content)))
+        self.send_header('Connection', 'close')
         self.end_headers()
-        self.wfile.write(b"OK")
+        self.wfile.write(response_content)
     def log_message(self, format, *args): return
 
 def run_health_check():
