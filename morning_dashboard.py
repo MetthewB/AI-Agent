@@ -79,7 +79,8 @@ def generate_dashboard():
     - Speak normally and conversationally. Just act like a normal human assistant.
     - Start with a hello and the Lausanne weather.
     - Give a brief, easy-to-read summary of the news (first world news, then swiss news, lastly french news).
-    - Use emojis naturally to make it visually pleasant.
+    - The news should concern geopolitics and major events.
+    - Use emojis naturally to make it visually pleasant, but only 3-4 emojis for the entire message.
     - ABSOLUTELY NO MARKDOWN. Do not use a single asterisk (*), underscore (_), header (#), or bullet point (-). Just pure plain text with emojis.
     """
     
