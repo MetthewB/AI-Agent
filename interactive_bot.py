@@ -7,12 +7,16 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+from huggingface_hub import InferenceClient
 
 # --- Configuration ---
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
+HF_TOKEN = os.environ.get("HF_TOKEN")
 CHAT_ID_ENV = os.environ.get("TELEGRAM_CHAT_ID", "0")
-# Clean the ID once at startup
 AUTHORIZED_USER = int("".join(filter(str.isdigit, CHAT_ID_ENV)))
+
+# Initialize HF Client
+llm_client = InferenceClient(model="Qwen/Qwen2.5-Coder-32B-Instruct", token=HF_TOKEN)
 
 PORTFOLIO_MAP = {
     "EUNL.DE": "MSCI World (EUNL)",
@@ -21,14 +25,20 @@ PORTFOLIO_MAP = {
     "GLD": "Gold (XAU)"
 }
 
-# --- Logging Setup ---
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    level=logging.INFO
-)
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# --- Health Check Server (Keep-Alive) ---
+# --- AI Brain Function ---
+def ask_llm(prompt: str) -> str:
+    try:
+        messages = [{"role": "user", "content": prompt}]
+        response = llm_client.chat_completion(messages=messages, max_tokens=400, temperature=0.3)
+        return response.choices[0].message.content
+    except Exception as e:
+        logger.error(f"LLM Error: {e}")
+        return "Sorry, my AI brain is a bit foggy right now."
+
+# --- Health Check Server ---
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         self.send_response(200)
@@ -36,143 +46,107 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
         self.send_header('Content-Length', '2')
         self.end_headers()
         self.wfile.write(b"OK")
-
-    def log_message(self, format, *args):
-        return # Silent logs to keep Render console clean
+    def log_message(self, format, *args): return
 
 def run_health_check():
     port = int(os.environ.get("PORT", 10000)) 
     server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
-    logger.info(f"🌍 Health check server active on port {port}")
     server.serve_forever()
 
-# --- Helpers ---
 def is_authorized(update: Update) -> bool:
     return update.effective_chat.id == AUTHORIZED_USER
 
 # --- Command Handlers ---
-async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update):
-        logger.warning(f"Unauthorized access attempt by ID: {update.effective_chat.id}")
-        await update.message.reply_text(f"🛑 Access Denied.\nYour ID: {update.effective_chat.id}")
-        return
 
+async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
     welcome = (
-        "Hello! I am Mattou bot, meow.\n\n"
-        "How can I help you today?\n"
+        "Hello! I am MattouBot, meow.\n\n"
         "/portfolio - Live market status\n"
-        "/news - Global & Swiss headlines\n"
+        "/news - Geopolitical summary\n"
+        "/weather - Lausanne current conditions\n"
         "/cat - Instant cat GIF break"
     )
     await update.message.reply_text(welcome)
 
+async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
+    await update.message.reply_text("Checking Lausanne weather... 🌡️")
+    try:
+        url = "https://api.open-meteo.com/v1/forecast?latitude=46.5197&longitude=6.6323&current_weather=true"
+        res = requests.get(url).json()
+        current = res['current_weather']
+        temp = current['temperature']
+        await update.message.reply_text(f"It is currently {temp}°C in Lausanne. 🏔️")
+    except:
+        await update.message.reply_text("⚠️ Weather service is temporarily down.")
+
 async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
-    
     await update.message.reply_text("📊 Fetching market data...")
     stats = []
-    
     for ticker, name in PORTFOLIO_MAP.items():
-        success = False
-        for attempt in range(3):
-            try:
-                data = yf.Ticker(ticker).history(period="2d")
-                if not data.empty and len(data) >= 2:
-                    current = data['Close'].iloc[-1]
-                    prev = data['Close'].iloc[-2]
-                    pct = ((current - prev) / prev) * 100
-                    stats.append(f"• {name}: {current:.2f} ({pct:+.2f}%)")
-                    success = True
-                    break
-            except Exception as e:
-                logger.error(f"Attempt {attempt+1} failed for {ticker}: {e}")
-            
-        if not success:
+        try:
+            data = yf.Ticker(ticker).history(period="2d")
+            current = data['Close'].iloc[-1]
+            prev = data['Close'].iloc[-2]
+            pct = ((current - prev) / prev) * 100
+            stats.append(f"• {name}: {current:.2f} ({pct:+.2f}%)")
+        except:
             stats.append(f"• {name}: ⚠️ Data unavailable")
-    
     await update.message.reply_text("📈 Live Portfolio:\n" + "\n".join(stats))
 
 async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
+    await update.message.reply_text("Analyzing the news... ⏳")
     
-    await update.message.reply_text("🌍 Scanning regional headlines...")
-    
-    queries = [
-        ("GLOBAL", "geopolitics+world+news"),
-        ("SWITZERLAND", "geopolitics+Switzerland"),
-        ("FRANCE", "geopolitics+France")
-    ]
-    
-    response_lines = ["📰 Latest Major Events", ""]
-    seen_titles = set()
+    raw_news = []
+    queries = ["geopolitics world", "geopolitics Switzerland", "geopolitics France"]
     
     try:
-        for region, q in queries:
+        for q in queries:
             url = f"https://news.google.com/rss/search?q={q}+when:1d&hl=en-US&gl=US&ceid=US:en"
             res = requests.get(url, timeout=10)
             soup = BeautifulSoup(res.content, "xml")
-            items = soup.find_all("item")
-            
-            region_added = 0
-            temp_lines = [f"📍 {region}"]
-            
+            items = soup.find_all("item", limit=2)
             for item in items:
-                if region_added >= 2: break
-                
-                full_title = item.title.text.split(" - ")[0].strip()
-                
-                if len(full_title) < 15 or "shownews" in full_title.lower():
-                    continue
-                
-                title_fingerprint = full_title[:20].lower()
-                if title_fingerprint in seen_titles:
-                    continue
-                
-                clean_title = full_title[:87] + "..." if len(full_title) > 90 else full_title
-                temp_lines.append(f"• {clean_title}")
-                seen_titles.add(title_fingerprint)
-                region_added += 1
-            
-            if region_added > 0:
-                response_lines.extend(temp_lines)
-                response_lines.append("")
+                raw_news.append(item.title.text)
         
-        final_response = "\n".join(response_lines).strip()
-        if not seen_titles:
-            final_response = "📰 No coherent news found in the last 24 hours."
-
-        await update.message.reply_text(final_response)
-        
+        news_context = "\n".join(raw_news)
+        prompt = f"""
+        Summarize these news headlines into a single, natural paragraph.
+        Focus only on major geopolitics for World, Switzerland, and France.
+        RULES:
+        - Speak like a helpful assistant.
+        - Use NO MARKDOWN (no stars, no bullets).
+        - Use exactly 2 emojis.
+        Headlines:
+        {news_context}
+        """
+        summary = ask_llm(prompt)
+        await update.message.reply_text(summary.replace("*", ""))
     except Exception as e:
-        logger.error(f"News error: {e}")
-        await update.message.reply_text("⚠️ News servers are busy. Please try again later.")
+        logger.error(f"News Error: {e}")
+        await update.message.reply_text("⚠️ News summarized failed. Try /portfolio instead?")
 
 async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
-    
     try:
         res = requests.get("https://api.thecatapi.com/v1/images/search?mime_types=gif", timeout=10).json()
-        await update.message.reply_animation(res[0]['url'])
-    except Exception as e:
-        logger.error(f"Cat error: {e}")
+        await update.message.reply_animation(res[0]['url'], caption="Voila! 🐾")
+    except:
         await update.message.reply_text("The cats are sleeping. 😴")
 
-# --- Main ---
 if __name__ == "__main__":
-    # Start Keep-Alive Server
     threading.Thread(target=run_health_check, daemon=True).start()
-    
     if not TOKEN:
-        logger.error("TELEGRAM_TOKEN not found in environment!")
+        logger.error("TELEGRAM_TOKEN missing!")
     else:
-        logger.info("🤖 Mattou Bot is starting...")
         app = Application.builder().token(TOKEN).build()
-        
-        # Add Handlers
         app.add_handler(CommandHandler("start", start_command))
         app.add_handler(CommandHandler("portfolio", portfolio_command))
         app.add_handler(CommandHandler("news", news_command))
+        app.add_handler(CommandHandler("weather", weather_command))
         app.add_handler(CommandHandler("cat", cat_command))
-        
-        # Start Polling
+        logger.info("🤖 MattouBot is live.")
         app.run_polling()
