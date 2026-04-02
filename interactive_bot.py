@@ -67,6 +67,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "/portfolio - Live market status\n"
         "/news - Geopolitical summary\n"
         "/weather - Lausanne current conditions\n"
+        "/research [topic] - Deep dive on any topic\n"
         "/cat - Instant cat GIF break"
     )
     await update.message.reply_text(welcome)
@@ -193,6 +194,7 @@ if __name__ == "__main__":
         app.add_handler(CommandHandler("portfolio", portfolio_command))
         app.add_handler(CommandHandler("news", news_command))
         app.add_handler(CommandHandler("weather", weather_command))
+        app.add_handler(CommandHandler("research", research_command))
         app.add_handler(CommandHandler("cat", cat_command))
         logger.info("🤖 MattouBot is live.")
         app.run_polling()
