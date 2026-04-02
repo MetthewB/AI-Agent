@@ -56,7 +56,7 @@ def run_health_check():
     server.serve_forever()
 
 def is_authorized(update: Update) -> bool:
-    return update.effective_chat.id == AUTHORIZED_USERS
+    return update.effective_chat.id in AUTHORIZED_USERS
 
 # --- Command Handlers ---
 
