@@ -9,14 +9,16 @@ from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from huggingface_hub import InferenceClient
 
-# --- Configuration ---
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 HF_TOKEN = os.environ.get("HF_TOKEN")
 CHAT_ID_ENV = os.environ.get("TELEGRAM_CHAT_ID", "0")
+
 AUTHORIZED_USERS = []
 for uid in CHAT_ID_ENV.split(","):
     clean_uid = uid.strip()
-    # A neat trick: temporarily remove the minus sign just to check if it's a number
     if clean_uid.replace("-", "").isdigit():
         AUTHORIZED_USERS.append(int(clean_uid))
 
@@ -32,17 +34,16 @@ PORTFOLIO_MAP = {
     "GLD": "Gold (XAU)"
 }
 
-logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
-logger = logging.getLogger(__name__)
-
 # --- AI Brain Function ---
 def ask_llm(prompt: str) -> str:
     try:
+        logger.info("🧠 Sending prompt to HuggingFace LLM...")
         messages = [{"role": "user", "content": prompt}]
         response = llm_client.chat_completion(messages=messages, max_tokens=400, temperature=0.3)
+        logger.info("✅ LLM response generated successfully.")
         return response.choices[0].message.content
     except Exception as e:
-        logger.error(f"LLM Error: {e}")
+        logger.error(f"❌ LLM Error: {e}")
         return "Sorry, my AI brain is a bit foggy right now."
 
 # --- Health Check Server ---
@@ -59,16 +60,24 @@ class HealthCheckHandler(BaseHTTPRequestHandler):
 
 def run_health_check():
     port = int(os.environ.get("PORT", 10000)) 
+    logger.info(f"🌐 Starting health check server on port {port}")
     server = HTTPServer(('0.0.0.0', port), HealthCheckHandler)
     server.serve_forever()
 
 def is_authorized(update: Update) -> bool:
-    return update.effective_chat.id in AUTHORIZED_USERS
+    chat_id = update.effective_chat.id
+    if chat_id in AUTHORIZED_USERS:
+        return True
+    else:
+        logger.warning(f"🛑 UNAUTHORIZED ACCESS ATTEMPT from ID: {chat_id}")
+        return False
 
 # --- Command Handlers ---
 
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /start")
+    
     welcome = (
         "Hello! I am MattouBot, meow.\n\n"
         "/portfolio - Live market status\n"
@@ -81,8 +90,8 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /weather")
     
-    # Lausanne coordinates
     lat, lon = 46.5197, 6.6323
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
     
@@ -92,7 +101,6 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         temp = current['temperature']
         code = current['weathercode']
         
-        # Mapping WMO codes to human-friendly descriptions
         wmo_map = {
             0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
             45: "Foggy", 48: "Foggy", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
@@ -106,18 +114,17 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(f"It is currently {temp}°C in Lausanne. Conditions: {condition.lower()}. 🏔️")
         
     except Exception as e:
-        logger.error(f"Weather Command Error: {e}")
+        logger.error(f"❌ Weather Command Error: {e}")
         await update.message.reply_text("⚠️ Weather data is temporarily unavailable. Check the window! 🪟")
 
 async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /portfolio")
     stats = []
     
     for ticker, name in PORTFOLIO_MAP.items():
         try:
-            # We let yfinance handle its own headers, but keep the 5-day lookback!
             data = yf.Ticker(ticker).history(period="5d")
-            
             if not data.empty and len(data) >= 2:
                 current = data['Close'].iloc[-1]
                 prev = data['Close'].iloc[-2]
@@ -127,13 +134,14 @@ async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 stats.append(f"• {name}: ⚠️ Market closed or empty data")
                 
         except Exception as e:
-            logger.error(f"Portfolio Error for {ticker}: {e}")
+            logger.error(f"❌ Portfolio Error for {ticker}: {e}")
             stats.append(f"• {name}: ⚠️ Fetch failed")
             
     await update.message.reply_text("📈 Live Portfolio:\n" + "\n".join(stats))
 
 async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /news")
     await update.message.reply_text("Analyzing the news... ⏳")
     
     raw_news = []
@@ -162,11 +170,12 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         summary = ask_llm(prompt)
         await update.message.reply_text(summary.replace("*", ""))
     except Exception as e:
-        logger.error(f"News Error: {e}")
+        logger.error(f"❌ News Error: {e}")
         await update.message.reply_text("⚠️ News summarized failed. Try /portfolio instead?")
 
 async def research_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /research")
     
     query = " ".join(context.args)
     if not query:
@@ -193,23 +202,25 @@ async def research_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             
         analysis = ask_llm(prompt)
-        
         await update.message.reply_text(f"📝 Research Summary:\n\n{analysis.replace('*', '')}")
     except Exception as e:
-        logger.error(f"Research error: {e}")
+        logger.error(f"❌ Research error: {e}")
         await update.message.reply_text("⚠️ Research failed. My brain is a bit tired.")
+
 async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /cat")
     try:
         res = requests.get("https://api.thecatapi.com/v1/images/search?mime_types=gif", timeout=10).json()
         await update.message.reply_animation(res[0]['url'])
-    except:
+    except Exception as e:
+        logger.error(f"❌ Cat API error: {e}")
         await update.message.reply_text("The cats are sleeping. 😴")
 
 if __name__ == "__main__":
     threading.Thread(target=run_health_check, daemon=True).start()
     if not TOKEN:
-        logger.error("TELEGRAM_TOKEN missing!")
+        logger.error("❌ TELEGRAM_TOKEN missing!")
     else:
         app = Application.builder().token(TOKEN).build()
         app.add_handler(CommandHandler("start", start_command))
@@ -218,5 +229,5 @@ if __name__ == "__main__":
         app.add_handler(CommandHandler("weather", weather_command))
         app.add_handler(CommandHandler("research", research_command))
         app.add_handler(CommandHandler("cat", cat_command))
-        logger.info("🤖 MattouBot is live.")
+        logger.info("🤖 MattouBot is live and polling for updates...")
         app.run_polling()
