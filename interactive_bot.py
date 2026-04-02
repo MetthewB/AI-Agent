@@ -74,8 +74,6 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     
-    await update.message.reply_text("🌡️ Checking the Lausanne sky...")
-    
     # Lausanne coordinates
     lat, lon = 46.5197, 6.6323
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
@@ -150,6 +148,32 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"News Error: {e}")
         await update.message.reply_text("⚠️ News summarized failed. Try /portfolio instead?")
+
+async def research_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
+    
+    query = " ".join(context.args)
+    if not query:
+        await update.message.reply_text("Please provide a topic! Example: /research Swiss neutrality 2026")
+        return
+
+    await update.message.reply_text(f"🔍 Researching '{query}' for you...")
+    
+    try:
+        # 1. Quick Search
+        search_url = f"https://news.google.com/rss/search?q={query}+when:7d&hl=en-US&gl=US&ceid=US:en"
+        res = requests.get(search_url, timeout=10)
+        soup = BeautifulSoup(res.content, "xml")
+        headlines = [item.title.text for item in soup.find_all("item", limit=5)]
+        
+        # 2. AI Synthesis
+        prompt = f"Analyze the following headlines regarding '{query}' and provide a concise, expert 3-sentence summary of the current situation:\n\n" + "\n".join(headlines)
+        analysis = ask_llm(prompt)
+        
+        await update.message.reply_text(f"📝 Research Summary:\n\n{analysis.replace('*', '')}")
+    except Exception as e:
+        logger.error(f"Research error: {e}")
+        await update.message.reply_text("⚠️ Research failed. My brain is a bit tired.")
 
 async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
