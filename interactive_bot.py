@@ -161,21 +161,28 @@ async def research_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(f"🔍 Researching '{query}' for you...")
     
     try:
-        # 1. Quick Search
         search_url = f"https://news.google.com/rss/search?q={query}+when:7d&hl=en-US&gl=US&ceid=US:en"
         res = requests.get(search_url, timeout=10)
         soup = BeautifulSoup(res.content, "xml")
         headlines = [item.title.text for item in soup.find_all("item", limit=5)]
         
-        # 2. AI Synthesis
-        prompt = f"Analyze the following headlines regarding '{query}' and provide a concise, expert 3-sentence summary of the current situation:\n\n" + "\n".join(headlines)
+        if headlines:
+            prompt = (
+                f"Analyze the following recent headlines regarding '{query}' and provide a concise, "
+                f"expert 3-sentence summary of the current situation:\n\n" + "\n".join(headlines)
+            )
+        else:
+            prompt = (
+                f"Using your expert general knowledge, provide a concise 3-sentence summary "
+                f"explaining the topic of '{query}'."
+            )
+            
         analysis = ask_llm(prompt)
         
         await update.message.reply_text(f"📝 Research Summary:\n\n{analysis.replace('*', '')}")
     except Exception as e:
         logger.error(f"Research error: {e}")
         await update.message.reply_text("⚠️ Research failed. My brain is a bit tired.")
-
 async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     try:
