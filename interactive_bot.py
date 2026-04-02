@@ -217,6 +217,9 @@ async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"❌ Cat API error: {e}")
         await update.message.reply_text("The cats are sleeping. 😴")
 
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    logger.error(f"❌ Telegram API Error: {context.error}")
+
 if __name__ == "__main__":
     threading.Thread(target=run_health_check, daemon=True).start()
     if not TOKEN:
@@ -229,5 +232,9 @@ if __name__ == "__main__":
         app.add_handler(CommandHandler("weather", weather_command))
         app.add_handler(CommandHandler("research", research_command))
         app.add_handler(CommandHandler("cat", cat_command))
+        
+        app.add_error_handler(error_handler)
+        
         logger.info("🤖 MattouBot is live and polling for updates...")
-        app.run_polling()
+        
+        app.run_polling(drop_pending_updates=True)
