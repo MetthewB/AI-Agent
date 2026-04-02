@@ -105,15 +105,11 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     stats = []
-
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
-    })
     
     for ticker, name in PORTFOLIO_MAP.items():
         try:
-            data = yf.Ticker(ticker, session=session).history(period="5d")
+            # We let yfinance handle its own headers, but keep the 5-day lookback!
+            data = yf.Ticker(ticker).history(period="5d")
             
             if not data.empty and len(data) >= 2:
                 current = data['Close'].iloc[-1]
