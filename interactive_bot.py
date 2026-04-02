@@ -13,7 +13,14 @@ from huggingface_hub import InferenceClient
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 HF_TOKEN = os.environ.get("HF_TOKEN")
 CHAT_ID_ENV = os.environ.get("TELEGRAM_CHAT_ID", "0")
-AUTHORIZED_USERS = [int(uid.strip()) for uid in CHAT_ID_ENV.split(",") if uid.strip().isdigit()]
+AUTHORIZED_USERS = []
+for uid in CHAT_ID_ENV.split(","):
+    clean_uid = uid.strip()
+    # A neat trick: temporarily remove the minus sign just to check if it's a number
+    if clean_uid.replace("-", "").isdigit():
+        AUTHORIZED_USERS.append(int(clean_uid))
+
+logger.info(f"✅ VIP List Loaded: {AUTHORIZED_USERS}")
 
 # Initialize HF Client
 llm_client = InferenceClient(model="Qwen/Qwen2.5-Coder-32B-Instruct", token=HF_TOKEN)
