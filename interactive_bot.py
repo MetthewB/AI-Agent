@@ -13,7 +13,7 @@ from huggingface_hub import InferenceClient
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 HF_TOKEN = os.environ.get("HF_TOKEN")
 CHAT_ID_ENV = os.environ.get("TELEGRAM_CHAT_ID", "0")
-AUTHORIZED_USER = int("".join(filter(str.isdigit, CHAT_ID_ENV)))
+AUTHORIZED_USERS = [int(uid.strip()) for uid in CHAT_ID_ENV.split(",") if uid.strip().isdigit()]
 
 # Initialize HF Client
 llm_client = InferenceClient(model="Qwen/Qwen2.5-Coder-32B-Instruct", token=HF_TOKEN)
@@ -56,7 +56,7 @@ def run_health_check():
     server.serve_forever()
 
 def is_authorized(update: Update) -> bool:
-    return update.effective_chat.id == AUTHORIZED_USER
+    return update.effective_chat.id == AUTHORIZED_USERS
 
 # --- Command Handlers ---
 
@@ -96,7 +96,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         }
         
         condition = wmo_map.get(code, "Mixed weather")
-        await update.message.reply_text(f"It is currently {temp}°C in Lausanne with {condition.lower()}. 🏔️")
+        await update.message.reply_text(f"It is currently {temp}°C in Lausanne. Conditions: {condition.lower()}. 🏔️")
         
     except Exception as e:
         logger.error(f"Weather Command Error: {e}")
