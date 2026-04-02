@@ -104,17 +104,29 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
-    await update.message.reply_text("📊 Fetching market data...")
     stats = []
+
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36"
+    })
+    
     for ticker, name in PORTFOLIO_MAP.items():
         try:
-            data = yf.Ticker(ticker).history(period="2d")
-            current = data['Close'].iloc[-1]
-            prev = data['Close'].iloc[-2]
-            pct = ((current - prev) / prev) * 100
-            stats.append(f"• {name}: {current:.2f} ({pct:+.2f}%)")
-        except:
-            stats.append(f"• {name}: ⚠️ Data unavailable")
+            data = yf.Ticker(ticker, session=session).history(period="5d")
+            
+            if not data.empty and len(data) >= 2:
+                current = data['Close'].iloc[-1]
+                prev = data['Close'].iloc[-2]
+                pct = ((current - prev) / prev) * 100
+                stats.append(f"• {name}: {current:.2f} ({pct:+.2f}%)")
+            else:
+                stats.append(f"• {name}: ⚠️ Market closed or empty data")
+                
+        except Exception as e:
+            logger.error(f"Portfolio Error for {ticker}: {e}")
+            stats.append(f"• {name}: ⚠️ Fetch failed")
+            
     await update.message.reply_text("📈 Live Portfolio:\n" + "\n".join(stats))
 
 async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
