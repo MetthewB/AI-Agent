@@ -1,8 +1,9 @@
 import os
+import time
 import requests
-import yfinance as yf
 import threading
 import logging
+import yfinance as yf
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from bs4 import BeautifulSoup
 from telegram import Update
@@ -221,20 +222,32 @@ async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> N
     logger.error(f"❌ Telegram API Error: {context.error}")
 
 if __name__ == "__main__":
+    # Start the health server in the background (this MUST stay alive!)
     threading.Thread(target=run_health_check, daemon=True).start()
+    
     if not TOKEN:
         logger.error("❌ TELEGRAM_TOKEN missing!")
     else:
-        app = Application.builder().token(TOKEN).build()
-        app.add_handler(CommandHandler("start", start_command))
-        app.add_handler(CommandHandler("portfolio", portfolio_command))
-        app.add_handler(CommandHandler("news", news_command))
-        app.add_handler(CommandHandler("weather", weather_command))
-        app.add_handler(CommandHandler("research", research_command))
-        app.add_handler(CommandHandler("cat", cat_command))
-        
-        app.add_error_handler(error_handler)
-        
-        logger.info("🤖 MattouBot is live and polling for updates...")
-        
-        app.run_polling(drop_pending_updates=True)
+        # The Invincible Loop
+        while True:
+            try:
+                logger.info("🤖 Building and starting MattouBot...")
+                app = Application.builder().token(TOKEN).build()
+                
+                # Add all your commands back to the fresh bot
+                app.add_handler(CommandHandler("start", start_command))
+                app.add_handler(CommandHandler("portfolio", portfolio_command))
+                app.add_handler(CommandHandler("news", news_command))
+                app.add_handler(CommandHandler("weather", weather_command))
+                app.add_handler(CommandHandler("research", research_command))
+                app.add_handler(CommandHandler("cat", cat_command))
+                
+                # Start polling
+                app.run_polling(drop_pending_updates=True)
+                
+            except Exception as e:
+                logger.error(f"❌ Critical App Crash: {e}")
+            
+            # If run_polling() gives up (like on a 409 Conflict), we trap it here!
+            logger.warning("⚠️ Bot stopped! Rebuilding in 10 seconds...")
+            time.sleep(10)
