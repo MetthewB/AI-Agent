@@ -41,6 +41,8 @@ PORTFOLIO_MAP = {
     "GLD": "Gold (XAU)"
 }
 
+GROCERY_FILE = "groceries.txt"
+
 # --- 4. Core Functions ---
 async def ask_llm(prompt: str) -> str:
     try:
@@ -111,10 +113,15 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /news - Global & European geopolitics\n\n"
         "<b>🧠 Knowledge & Utility</b>\n"
         "• /research [topic] - AI deep dive\n"
-        "• /weather - Lausanne conditions\n\n"
+        "• /weather [city] - Current conditions\n"
+        "• /remind [min] [text] - Set a timer\n\n"
+        "<b>🛒 Shared Life</b>\n"
+        "• /grocery [item] - Add an item to the list\n"
+        "• /grocery - View the current list\n"
+        "• /grocery_empty - Clear the list\n\n"
         "<b>🎉 Fun & Extras</b>\n"
         "• /cat - Instant feline dopamine\n"
-        "• /dateidea - Generate a date idea\n"
+        "• /dateidea [city] - Generate a date idea\n"
     )
     await update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
 
@@ -190,6 +197,88 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"❌ Weather Command Error: {e}")
         await status_msg.edit_text("⚠️ <i>Weather data unavailable. Check the window!</i> 🪟", parse_mode=ParseMode.HTML)
+
+async def grocery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /grocery")
+    
+    item = " ".join(context.args)
+    
+    # 1. IF NO ITEM IS TYPED -> Show the current list
+    if not item:
+        try:
+            with open(GROCERY_FILE, "r") as f:
+                items = f.read().splitlines()
+                
+            if not items:
+                await update.message.reply_text("🛒 <b>The grocery list is currently empty!</b>", parse_mode=ParseMode.HTML)
+            else:
+                # Format the list with bullet points
+                formatted_list = "\n".join([f"• {i}" for i in items])
+                await update.message.reply_text(f"🛒 <b>Shared Shopping List:</b>\n\n{formatted_list}", parse_mode=ParseMode.HTML)
+        except FileNotFoundError:
+            # If the file doesn't exist yet, it means the list is empty
+            await update.message.reply_text("🛒 <b>The grocery list is currently empty!</b>", parse_mode=ParseMode.HTML)
+        return
+
+    # 2. IF AN ITEM IS TYPED -> Add it to the list
+    try:
+        # "a" means append (add to the bottom of the file)
+        with open(GROCERY_FILE, "a") as f:
+            f.write(item + "\n")
+        await update.message.reply_text(f"✅ Added <b>{item}</b> to the list!", parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.error(f"❌ Grocery Add Error: {e}")
+        await update.message.reply_text("⚠️ <i>Failed to add the item. The cart is stuck!</i>", parse_mode=ParseMode.HTML)
+
+async def grocery_empty_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /grocery_empty")
+    
+    try:
+        if os.path.exists(GROCERY_FILE):
+            os.remove(GROCERY_FILE)
+            await update.message.reply_text("🧹 <b>Grocery list cleared!</b> Happy cooking! 🍳", parse_mode=ParseMode.HTML)
+        else:
+            await update.message.reply_text("🛒 <b>The list was already empty!</b>", parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.error(f"❌ Grocery Clear Error: {e}")
+        await update.message.reply_text("⚠️ <i>Failed to clear the list!</i>", parse_mode=ParseMode.HTML)
+
+async def remind_callback(context: ContextTypes.DEFAULT_TYPE):
+    """This is the function that triggers when the timer hits 0."""
+    job = context.job
+    await context.bot.send_message(
+        chat_id=job.chat_id, 
+        text=f"🔔 <b>REMINDER:</b> {job.data}", 
+        parse_mode=ParseMode.HTML
+    )
+
+async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """This sets the actual timer."""
+    if not is_authorized(update): return
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /remind")
+    
+    chat_id = update.effective_chat.id
+    
+    try:
+        minutes = int(context.args[0])
+        message = " ".join(context.args[1:])
+        
+        if minutes <= 0:
+            await update.message.reply_text("⚠️ <i>Time must be greater than 0 minutes.</i>", parse_mode=ParseMode.HTML)
+            return
+            
+        if not message:
+            await update.message.reply_text("⚠️ <i>What do you want me to remind you about? (e.g., /remind 5 check the oven)</i>", parse_mode=ParseMode.HTML)
+            return
+            
+        context.job_queue.run_once(remind_callback, minutes * 60, data=message, chat_id=chat_id)
+        
+        await update.message.reply_text(f"🕒 Got it! I will remind you to <b>{message}</b> in {minutes} minute(s).", parse_mode=ParseMode.HTML)
+        
+    except (IndexError, ValueError):
+        await update.message.reply_text("⚠️ <b>Usage:</b> /remind [minutes] [message]\n<i>Example: /remind 10 flip the laundry</i>", parse_mode=ParseMode.HTML)
 
 async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
@@ -421,6 +510,9 @@ if __name__ == "__main__":
                 app.add_handler(CommandHandler("portfolio", portfolio_command))
                 app.add_handler(CommandHandler("news", news_command))
                 app.add_handler(CommandHandler("weather", weather_command))
+                app.add_handler(CommandHandler("grocery", grocery_command))
+                app.add_handler(CommandHandler("remind", remind_command))
+                app.add_handler(CommandHandler("grocery_empty", grocery_empty_command))
                 app.add_handler(CommandHandler("research", research_command))
                 app.add_handler(CommandHandler("cat", cat_command))
                 app.add_handler(CommandHandler("dateidea", dateidea_command))
