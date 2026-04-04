@@ -163,8 +163,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<b>🧠 Knowledge & Utility</b>\n"
         "• /research [topic] - AI deep dive\n"
         "• /weather [city] - Current conditions\n"
-        "• /remind [min] [text] - Set a timer\n"
-        "• /translate [lang]: [text] - Quick translation\n\n"
+        "• /remind [min] [text] - Set a timer\n\n"
         "<b>🛒 Shared Life</b>\n"
         "• /grocery [item] - Add an item to the list\n"
         "• /grocery - View the current list\n"
@@ -473,12 +472,19 @@ async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     CRITICAL RULES:
     1. Provide a catchy, appetizing Title.
     2. Provide a short "Ingredients list" and a concise step-by-step "Instructions" list.
-    3. Format the output cleanly using basic HTML tags like <b> and <i>. 
+    3. Format the output cleanly using ONLY basic HTML tags (<b> and <i>). Ensure ALL tags are properly closed!
     4. ABSOLUTELY NO MARKDOWN (*, **, #). Use standard numbers for lists.
     5. Keep the tone encouraging and culinary.
     """
     recipe_output = await ask_llm(prompt)
-    await status_msg.edit_text(recipe_output, parse_mode=ParseMode.HTML)
+    try:
+        await status_msg.edit_text(recipe_output, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.error(f"❌ HTML Parsing Error in Recipe: {e}")
+        await status_msg.edit_text(
+            f"👨‍🍳 <b>Here is your recipe!</b> (<i>HTML formatting disabled due to an AI glitch</i>):\n\n{recipe_output}", 
+            parse_mode=None
+        )
 
 # --- Fun & Extras ---
 
