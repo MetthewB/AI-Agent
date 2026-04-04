@@ -87,7 +87,6 @@ def run_health_check():
     server.serve_forever()
 
 # --- 6. Command Handlers ---
-
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     logger.info(f"▶️ User {update.effective_chat.id} triggered /start")
@@ -123,35 +122,70 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     logger.info(f"▶️ User {update.effective_chat.id} triggered /weather")
     
-    status_msg = await update.message.reply_text("<i>Looking out the window in Lausanne...</i> 🏔️", parse_mode=ParseMode.HTML)
+    # Check if a city was provided (e.g., /weather Zurich)
+    city_query = " ".join(context.args)
     
-    lat, lon = 46.5197, 6.6323
-    url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+    if city_query:
+        status_msg = await update.message.reply_text(f"<i>Looking for {city_query} on the map...</i> 🌍", parse_mode=ParseMode.HTML)
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_query}&count=1&language=en&format=json"
+        
+        try:
+            # 1. Fetch coordinates for the requested city
+            geo_res = await asyncio.to_thread(requests.get, geo_url, timeout=10)
+            geo_data = geo_res.json()
+            
+            if "results" not in geo_data:
+                await status_msg.edit_text(f"⚠️ <i>I couldn't find a city named '<b>{city_query}</b>'. Did you make a typo?</i>", parse_mode=ParseMode.HTML)
+                return
+                
+            city_name = geo_data['results'][0]['name']
+            country = geo_data['results'][0].get('country', '')
+            display_name = f"{city_name}, {country}" if country else city_name
+            lat = geo_data['results'][0]['latitude']
+            lon = geo_data['results'][0]['longitude']
+            
+        except Exception as e:
+            logger.error(f"❌ Geocoding Error: {e}")
+            await status_msg.edit_text("⚠️ <i>My map is broken right now. Try again later!</i> 🗺️", parse_mode=ParseMode.HTML)
+            return
+    else:
+        # 2. Default to Lausanne if no city is provided
+        status_msg = await update.message.reply_text("<i>Looking out the window in Lausanne...</i> 🏔️", parse_mode=ParseMode.HTML)
+        display_name = "Lausanne, Switzerland"
+        lat, lon = 46.5197, 6.6323
+
+    # 3. Fetch the weather using the coordinates
+    weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
     
     try:
-        res = await asyncio.to_thread(requests.get, url, timeout=10)
+        res = await asyncio.to_thread(requests.get, weather_url, timeout=10)
         data = res.json()
         
         current = data['current_weather']
         temp = current['temperature']
         code = current['weathercode']
         
+        # WMO map (Full version)
         wmo_map = {
             0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
-            45: "Foggy", 61: "Light rain", 65: "Heavy rain", 71: "Light snow", 95: "Thunderstorm" # (truncated for brevity)
+            45: "Foggy", 48: "Foggy", 51: "Light drizzle", 53: "Drizzle", 55: "Heavy drizzle",
+            61: "Light rain", 63: "Moderate rain", 65: "Heavy rain",
+            71: "Light snow", 73: "Moderate snow", 75: "Heavy snow",
+            80: "Light showers", 81: "Moderate showers", 82: "Heavy showers",
+            95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Heavy thunderstorm"
         }
         condition = wmo_map.get(code, "mixed weather")
         
-        # Now, pass this raw data to the AI to make it fun!
+        # 4. Pass the dynamic city and raw data to the AI
         prompt = f"""
-        The current weather in Lausanne, Switzerland is {temp}°C with {condition}. 
+        The current weather in {display_name} is {temp}°C with {condition}. 
         Write a short, 2-sentence cute and slightly sassy weather report for a couple. 
         Advise them on what to wear or if it's a good day to stay inside.
         Format the output cleanly using HTML <b> tags for the temperature. No markdown asterisks.
         """
         
         forecast = await ask_llm(prompt)
-        await status_msg.edit_text(f"🏔️ <b>Lausanne Forecast</b>\n\n{forecast}", parse_mode=ParseMode.HTML)
+        await status_msg.edit_text(f"🌍 <b>Forecast for {display_name}</b>\n\n{forecast}", parse_mode=ParseMode.HTML)
         
     except Exception as e:
         logger.error(f"❌ Weather Command Error: {e}")
@@ -161,21 +195,50 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     logger.info(f"▶️ User {update.effective_chat.id} triggered /dateidea")
     
+    # 1. Check if a specific city was requested
+    location_query = " ".join(context.args)
+    
     status_msg = await update.message.reply_text("<i>Checking the weather and thinking of something romantic...</i> 🍷", parse_mode=ParseMode.HTML)
     
-    # 1. Get the current date (so the AI knows if it's Winter, Spring, etc.)
+    # 2. Get the current date (so the AI knows if it's Winter, Spring, etc.)
     current_date = datetime.datetime.now().strftime("%A, %B %d, %Y")
     
-    # 2. Get the current weather (using Lausanne coordinates as a regional baseline)
-    lat, lon = 46.5197, 6.6323
+    # 3. Setup default vs custom location
+    if location_query:
+        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={location_query}&count=1&language=en&format=json"
+        try:
+            geo_res = await asyncio.to_thread(requests.get, geo_url, timeout=10)
+            geo_data = geo_res.json()
+            
+            if "results" not in geo_data:
+                await status_msg.edit_text(f"⚠️ <i>I couldn't find a place named '<b>{location_query}</b>'. Did you make a typo?</i>", parse_mode=ParseMode.HTML)
+                return
+                
+            city_name = geo_data['results'][0]['name']
+            country = geo_data['results'][0].get('country', '')
+            display_location = f"{city_name}, {country}" if country else city_name
+            lat = geo_data['results'][0]['latitude']
+            lon = geo_data['results'][0]['longitude']
+        except Exception as e:
+            logger.error(f"❌ Geocoding Error for dateidea: {e}")
+            await status_msg.edit_text("⚠️ <i>My map is broken right now. Try again later!</i> 🗺️", parse_mode=ParseMode.HTML)
+            return
+    else:
+        # Default fallback to your home region
+        display_location = "the Vaud/Valais region of Switzerland"
+        lat, lon = 46.5197, 6.6323 # Lausanne coordinates
+
+    # 4. Get the current weather for the selected coordinates
     weather_condition = "Unknown"
     temp = "Unknown"
     
     try:
         url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
         res = await asyncio.to_thread(requests.get, url, timeout=10)
-        temp = res['current_weather']['temperature']
-        code = res['current_weather']['weathercode']
+        data = res.json()
+        
+        temp = data['current_weather']['temperature']
+        code = data['current_weather']['weathercode']
         
         wmo_map = {
             0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
@@ -189,13 +252,13 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"Weather fetch failed for dateidea: {e}")
 
-    # 3. Pick a random vibe
+    # 5. Pick a random vibe
     vibes = ["cozy and relaxed", "adventurous outdoors", "cultural and artistic", "foodie focused", "budget-friendly"]
     vibe = random.choice(vibes)
     
-    # 4. Build the Context-Aware Prompt
+    # 6. Build the Context-Aware Prompt dynamically
     prompt = f"""
-    Suggest one unique, specific, and fun date idea for a couple living in or near the Vaud/Valais region of Switzerland.
+    Suggest one unique, specific, and fun date idea for a couple located in or near {display_location}.
     
     CURRENT CONTEXT:
     - Today's Date: {current_date}
@@ -204,8 +267,10 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     CRITICAL RULES:
     1. The date idea MUST strictly make sense for the current weather and season (e.g., no outdoor picnics in a thunderstorm, no skiing in July).
-    2. Provide a catchy Title, a short 2-sentence description, and an estimated cost (e.g., Free, $$, $$$).
-    3. Format the output cleanly using basic HTML tags like <b> for bolding. No markdown asterisks.
+    2. Ensure the location makes geographical sense for {display_location}.
+    3. Provide a catchy Title, a short 2-sentence description, and an estimated cost (e.g., Free, $$, $$$).
+    4. Format the output cleanly using basic HTML tags like <b> for bolding. No markdown asterisks.
+    5. EXACTLY 2 or 3 emojis must be used in your entire response. No more, no less.
     """
     
     idea = await ask_llm(prompt) 
