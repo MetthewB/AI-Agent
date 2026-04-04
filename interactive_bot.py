@@ -472,9 +472,10 @@ async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     CRITICAL RULES:
     1. Provide a catchy, appetizing Title.
     2. Provide a short "Ingredients list" and a concise step-by-step "Instructions" list.
-    3. Format the output cleanly using ONLY basic HTML tags (<b> and <i>). Ensure ALL tags are properly closed!
-    4. ABSOLUTELY NO MARKDOWN (*, **, #). Use standard numbers for lists.
-    5. Keep the tone encouraging and culinary.
+    3. Format the output cleanly using ONLY Telegram-supported HTML tags: <b> and <i>.
+    4. FORBIDDEN HTML: Do NOT use <ol>, <ul>, <li>, or <br> tags. Use standard text numbers (1., 2., 3.) or bullet points (•) for your lists.
+    5. FORBIDDEN MARKDOWN: Do NOT use markdown asterisks (* or **). 
+    6. Keep the tone encouraging and culinary.
     """
     recipe_output = await ask_llm(prompt)
     try:
