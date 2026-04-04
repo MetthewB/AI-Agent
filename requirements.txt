@@ -5,5 +5,7 @@ ddgs
 requests
 yfinance
 icalevents
-pytz
 python-telegram-bot
+beautifulsoup4
+lxml
+huggingface-hub

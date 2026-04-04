@@ -4,6 +4,8 @@ import requests
 import threading
 import logging
 import random
+import asyncio
+import datetime
 import yfinance as yf
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from bs4 import BeautifulSoup
@@ -41,14 +43,20 @@ PORTFOLIO_MAP = {
 
 # --- 4. Core Functions ---
 async def ask_llm(prompt: str) -> str:
-    """Sends a prompt to the HuggingFace LLM asynchronously."""
     try:
         logger.info("🧠 Sending prompt to HuggingFace LLM...")
         messages = [{"role": "user", "content": prompt}]
-        # 👈 Added 'await' here
-        response = await llm_client.chat_completion(messages=messages, max_tokens=400, temperature=0.3)
+        
+        response = await asyncio.wait_for(
+            llm_client.chat_completion(messages=messages, max_tokens=400, temperature=0.7),
+            timeout=15.0
+        )
+        
         logger.info("✅ LLM response generated successfully.")
         return response.choices[0].message.content
+    except asyncio.TimeoutError:
+        logger.error("❌ LLM Error: Request timed out.")
+        return "<i>My AI brain took too long to think! The servers are busy, please try again.</i>"
     except Exception as e:
         logger.error(f"❌ LLM Error: {e}")
         return "<i>Sorry, my AI brain is a bit foggy right now.</i>"
@@ -115,14 +123,59 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     logger.info(f"▶️ User {update.effective_chat.id} triggered /weather")
     
+    status_msg = await update.message.reply_text("<i>Looking out the window in Lausanne...</i> 🏔️", parse_mode=ParseMode.HTML)
+    
     lat, lon = 46.5197, 6.6323
     url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
     
     try:
-        res = requests.get(url, timeout=10).json()
-        current = res['current_weather']
+        res = await asyncio.to_thread(requests.get, url, timeout=10)
+        data = res.json()
+        
+        current = data['current_weather']
         temp = current['temperature']
         code = current['weathercode']
+        
+        wmo_map = {
+            0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
+            45: "Foggy", 61: "Light rain", 65: "Heavy rain", 71: "Light snow", 95: "Thunderstorm" # (truncated for brevity)
+        }
+        condition = wmo_map.get(code, "mixed weather")
+        
+        # Now, pass this raw data to the AI to make it fun!
+        prompt = f"""
+        The current weather in Lausanne, Switzerland is {temp}°C with {condition}. 
+        Write a short, 2-sentence cute and slightly sassy weather report for a couple. 
+        Advise them on what to wear or if it's a good day to stay inside.
+        Format the output cleanly using HTML <b> tags for the temperature. No markdown asterisks.
+        """
+        
+        forecast = await ask_llm(prompt)
+        await status_msg.edit_text(f"🏔️ <b>Lausanne Forecast</b>\n\n{forecast}", parse_mode=ParseMode.HTML)
+        
+    except Exception as e:
+        logger.error(f"❌ Weather Command Error: {e}")
+        await status_msg.edit_text("⚠️ <i>Weather data unavailable. Check the window!</i> 🪟", parse_mode=ParseMode.HTML)
+
+async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /dateidea")
+    
+    status_msg = await update.message.reply_text("<i>Checking the weather and thinking of something romantic...</i> 🍷", parse_mode=ParseMode.HTML)
+    
+    # 1. Get the current date (so the AI knows if it's Winter, Spring, etc.)
+    current_date = datetime.datetime.now().strftime("%A, %B %d, %Y")
+    
+    # 2. Get the current weather (using Lausanne coordinates as a regional baseline)
+    lat, lon = 46.5197, 6.6323
+    weather_condition = "Unknown"
+    temp = "Unknown"
+    
+    try:
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+        res = await asyncio.to_thread(requests.get, url, timeout=10)
+        temp = res['current_weather']['temperature']
+        code = res['current_weather']['weathercode']
         
         wmo_map = {
             0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast",
@@ -132,38 +185,30 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             80: "Light showers", 81: "Moderate showers", 82: "Heavy showers",
             95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Heavy thunderstorm"
         }
-        
-        condition = wmo_map.get(code, "Mixed weather")
-        weather_msg = (
-            "🏔️ <b>Lausanne Weather</b>\n"
-            f"Currently: <b>{temp}°C</b>\n"
-            f"Conditions: <i>{condition}</i>"
-        )
-        await update.message.reply_text(weather_msg, parse_mode=ParseMode.HTML)
+        weather_condition = wmo_map.get(code, "mixed weather").lower()
     except Exception as e:
-        logger.error(f"❌ Weather Command Error: {e}")
-        await update.message.reply_text("⚠️ <i>Weather data unavailable. Check the window!</i> 🪟", parse_mode=ParseMode.HTML)
+        logger.error(f"Weather fetch failed for dateidea: {e}")
 
-async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update): return
-    logger.info(f"▶️ User {update.effective_chat.id} triggered /dateidea")
-    
-    # Send a temporary thinking message
-    status_msg = await update.message.reply_text("<i>Thinking of something romantic...</i> 🍷", parse_mode=ParseMode.HTML)
-    
+    # 3. Pick a random vibe
     vibes = ["cozy and relaxed", "adventurous outdoors", "cultural and artistic", "foodie focused", "budget-friendly"]
     vibe = random.choice(vibes)
     
+    # 4. Build the Context-Aware Prompt
     prompt = f"""
     Suggest one unique, specific, and fun date idea for a couple living in or near the Vaud/Valais region of Switzerland.
-    The vibe should be: {vibe}.
-    Provide a catchy Title, a short 2-sentence description, and an estimated cost (e.g., Free, $$, $$$).
-    Format the output cleanly using basic HTML tags like <b> for bolding. No markdown asterisks.
+    
+    CURRENT CONTEXT:
+    - Today's Date: {current_date}
+    - Current Weather: {temp}°C and {weather_condition}
+    - Requested Vibe: {vibe}
+    
+    CRITICAL RULES:
+    1. The date idea MUST strictly make sense for the current weather and season (e.g., no outdoor picnics in a thunderstorm, no skiing in July).
+    2. Provide a catchy Title, a short 2-sentence description, and an estimated cost (e.g., Free, $$, $$$).
+    3. Format the output cleanly using basic HTML tags like <b> for bolding. No markdown asterisks.
     """
     
-    idea = await ask_llm(prompt)
-    
-    # Edit the thinking message with the final result
+    idea = await ask_llm(prompt) 
     await status_msg.edit_text(idea, parse_mode=ParseMode.HTML)
 
 async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -173,12 +218,13 @@ async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     stats = []
     for ticker, name in PORTFOLIO_MAP.items():
         try:
-            data = yf.Ticker(ticker).history(period="5d")
+            stock = yf.Ticker(ticker)
+            data = await asyncio.to_thread(stock.history, period="5d")
+            
             if not data.empty and len(data) >= 2:
                 current = data['Close'].iloc[-1]
                 prev = data['Close'].iloc[-2]
                 pct = ((current - prev) / prev) * 100
-                # 👈 Upgraded to monospace <code> for beautiful alignment
                 stats.append(f"• {name}:\n  <code>{current:.2f} ({pct:+.2f}%)</code>")
             else:
                 stats.append(f"• {name}:\n  <code>⚠️ Market closed</code>")
@@ -202,7 +248,7 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         for q in queries:
             url = f"https://news.google.com/rss/search?q={q}+when:1d&hl=en-US&gl=US&ceid=US:en"
-            res = requests.get(url, timeout=10)
+            res = await asyncio.to_thread(requests.get, url, timeout=10)
             soup = BeautifulSoup(res.content, "xml")
             for item in soup.find_all("item", limit=2):
                 raw_news.append(item.title.text)
@@ -219,7 +265,6 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         Headlines:
         {news_context}
         """
-        # 👈 'await' added here since ask_llm is async now
         summary = await ask_llm(prompt)
         await status_msg.edit_text(f"📰 <b>Geopolitical Briefing</b>\n\n{summary.replace('*', '')}", parse_mode=ParseMode.HTML)
     except Exception as e:
@@ -238,21 +283,39 @@ async def research_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await update.message.reply_text(f"🔍 <i>Researching '{query}'...</i>", parse_mode=ParseMode.HTML)
     
     try:
-        search_url = f"https://news.google.com/rss/search?q={query}+when:7d&hl=en-US&gl=US&ceid=US:en"
-        res = requests.get(search_url, timeout=10)
+        search_url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
+        res = await asyncio.to_thread(requests.get, search_url, timeout=10)
         soup = BeautifulSoup(res.content, "xml")
         headlines = [item.title.text for item in soup.find_all("item", limit=5)]
         
         if headlines:
-            prompt = (
-                f"Analyze the following recent headlines regarding '{query}'. Provide a concise, "
-                f"expert 3-sentence summary of the current situation. Use <b> tags for important keywords, no markdown.\n\n" + "\n".join(headlines)
-            )
+            headlines_text = "\n".join(headlines)
+            prompt = f"""
+            You are a strict, highly accurate intelligence analyst.
+            Based ONLY on the following headlines, provide a 3-sentence summary of the current situation regarding '{query}'.
+            
+            CRITICAL RULES:
+            1. You are strictly forbidden from adding outside information or guessing.
+            2. If these headlines are completely irrelevant to '{query}', or too vague to summarize, DO NOT attempt to write a summary. Instead, reply EXACTLY with:
+            "⚠️ <i>The recent news headlines do not contain enough relevant information to provide a reliable summary.</i>"
+            3. Use <b> tags for key entities. No markdown asterisks.
+            
+            HEADLINES:
+            {headlines_text}
+            """
         else:
-            prompt = (
-                f"Using your expert general knowledge, provide a concise 3-sentence summary "
-                f"explaining the topic of '{query}'. Use <b> tags for important keywords, no markdown."
-            )
+            prompt = f"""
+            You are a strict, highly accurate research assistant. 
+            Your task is to explain the topic '{query}'.
+            
+            CRITICAL RULES:
+            1. You are strictly forbidden from guessing, assuming, or hallucinating facts.
+            2. If '{query}' refers to an event where facts are not fully confirmed, state ONLY what is officially known.
+            3. If you do not have enough verified factual knowledge to write a 3-sentence summary, DO NOT guess. Instead, reply EXACTLY with:
+            "⚠️ <i>I do not have enough verified, reliable information in my database to summarize this topic accurately.</i>"
+            
+            If you DO have the facts, provide a concise 3-sentence summary using <b> tags for important keywords. No markdown asterisks.
+            """
             
         analysis = await ask_llm(prompt)
         await status_msg.edit_text(f"📝 <b>Research Summary: {query}</b>\n\n{analysis.replace('*', '')}", parse_mode=ParseMode.HTML)
@@ -264,8 +327,10 @@ async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     logger.info(f"▶️ User {update.effective_chat.id} triggered /cat")
     try:
-        res = requests.get("https://api.thecatapi.com/v1/images/search?mime_types=gif", timeout=10).json()
-        await update.message.reply_animation(res[0]['url'])
+        cat_url = f"https://api.thecatapi.com/v1/images/search?mime_types=gif"
+        res = await asyncio.to_thread(requests.get, cat_url, timeout=10)
+        data = res.json()
+        await update.message.reply_animation(data[0]['url'])
     except Exception as e:
         logger.error(f"❌ Cat API error: {e}")
         await update.message.reply_text("<i>The cats are sleeping.</i> 😴", parse_mode=ParseMode.HTML)
