@@ -560,8 +560,8 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     status_msg = await update.message.reply_text("🏃‍♂️ <i>Syncing with Strava and designing your workout...</i>", parse_mode=ParseMode.HTML)
-    history_text = await get_recent_strava_activities(limit=3)
-    current_date = datetime.datetime.now().strftime("%A, %B %d, %Y")
+    history_text = await get_recent_strava_activities(limit=5)
+    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
     
     prompt = f"""
     You are an elite, highly knowledgeable personal trainer. 
@@ -573,12 +573,12 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     CLIENT REQUEST:
     They want to do a workout focusing on: {request_details}
     
-    CLIENT'S RECENT STRAVA HISTORY (for context on fatigue/recent volume):
+    CLIENT'S RECENT STRAVA HISTORY (Format: YYYY-MM-DD):
     {history_text}
     
     CRITICAL RULES:
-    1. Analyze their recent history and compare it to Today's Date. If their last hard workout was 6 days ago, they are well-rested. If it was yesterday, advise them to take it easy.
-    2. Provide a structured, tailored workout plan based strictly on their request ({request_details}).
+    1. Look EXACTLY at the dates in the history and compare them mathematically to Today's Date ({current_date}). Calculate the actual days of rest they have had. Do NOT assume a workout was yesterday unless the dates are exactly 1 day apart.
+    2. Provide a structured, tailored workout plan based strictly on their request ({request_details}), adapting the intensity based on true rest days.
     3. Include a Warm-up, the Main Set, and a Cool-down.
     4. Format the output cleanly using ONLY basic HTML tags like <b> and <i>. 
     5. ABSOLUTELY NO MARKDOWN (*, **, #). Use standard numbers or bullet points (•) for lists.
