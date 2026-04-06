@@ -155,12 +155,13 @@ async def get_recent_strava_activities(limit: int = 3) -> str:
         for act in activities:
             name = act.get('name', 'Workout')
             sport = act.get('sport_type', 'Activity')
-            # Strava returns distance in meters and time in seconds
+            date_str = act.get('start_date_local', 'Unknown Date')[:10]
+            
             distance_km = act.get('distance', 0) / 1000
             time_min = act.get('moving_time', 0) // 60
             hr = act.get('average_heartrate', 'N/A')
             
-            history.append(f"- {sport}: '{name}' ({distance_km:.1f}km in {time_min} mins. Avg HR: {hr} bpm)")
+            history.append(f"- {date_str} | {sport}: '{name}' ({distance_km:.1f}km in {time_min} mins. Avg HR: {hr} bpm)")
             
         return "\n".join(history)
     except Exception as e:
@@ -559,13 +560,15 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     status_msg = await update.message.reply_text("🏃‍♂️ <i>Syncing with Strava and designing your workout...</i>", parse_mode=ParseMode.HTML)
-    
-    # Fetch recent history to give the AI context!
     history_text = await get_recent_strava_activities(limit=3)
+    current_date = datetime.datetime.now().strftime("%A, %B %d, %Y")
     
     prompt = f"""
     You are an elite, highly knowledgeable personal trainer. 
     Your client wants a tailored workout.
+    
+    CURRENT CONTEXT:
+    - Today's Date: {current_date}
     
     CLIENT REQUEST:
     They want to do a workout focusing on: {request_details}
@@ -574,12 +577,13 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     {history_text}
     
     CRITICAL RULES:
-    1. Analyze their recent history. If they just did a massive run yesterday and are asking for a hard run today, advise them to take it easy or suggest recovery variations.
+    1. Analyze their recent history and compare it to Today's Date. If their last hard workout was 6 days ago, they are well-rested. If it was yesterday, advise them to take it easy.
     2. Provide a structured, tailored workout plan based strictly on their request ({request_details}).
     3. Include a Warm-up, the Main Set, and a Cool-down.
-    4. Format the output cleanly using basic HTML tags like <b> and <i>. 
+    4. Format the output cleanly using ONLY basic HTML tags like <b> and <i>. 
     5. ABSOLUTELY NO MARKDOWN (*, **, #). Use standard numbers or bullet points (•) for lists.
     6. Keep the tone motivating but scientifically sound. Max 3 emojis.
+    7. FORBIDDEN HTML: Do NOT invent fake tags like <emoji>. Insert emojis directly as regular text. Do NOT use <ol>, <ul>, <li>, or <br>.
     """
     
     workout = await ask_llm(prompt)
