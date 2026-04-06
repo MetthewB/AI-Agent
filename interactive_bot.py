@@ -28,6 +28,9 @@ logger = logging.getLogger(__name__)
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 HF_TOKEN = os.environ.get("HF_TOKEN")
 CHAT_ID_ENV = os.environ.get("TELEGRAM_CHAT_ID", "0")
+STRAVA_CLIENT_ID = os.environ.get("STRAVA_CLIENT_ID")
+STRAVA_CLIENT_SECRET = os.environ.get("STRAVA_CLIENT_SECRET")
+STRAVA_REFRESH_TOKEN = os.environ.get("STRAVA_REFRESH_TOKEN")
 
 AUTHORIZED_USERS = []
 for uid in CHAT_ID_ENV.split(","):
@@ -114,6 +117,56 @@ def parse_time_string(time_str: str) -> int:
             
     return total_seconds
 
+async def get_strava_access_token() -> str:
+    """Uses the refresh token to get a temporary access token for Strava."""
+    if not all([STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_REFRESH_TOKEN]):
+        logger.error("❌ Missing Strava credentials in environment variables.")
+        return None
+        
+    url = "https://www.strava.com/oauth/token"
+    payload = {
+        "client_id": STRAVA_CLIENT_ID,
+        "client_secret": STRAVA_CLIENT_SECRET,
+        "grant_type": "refresh_token",
+        "refresh_token": STRAVA_REFRESH_TOKEN
+    }
+    try:
+        res = await asyncio.to_thread(requests.post, url, data=payload, timeout=10)
+        return res.json().get("access_token")
+    except Exception as e:
+        logger.error(f"❌ Strava Token Error: {e}")
+        return None
+
+async def get_recent_strava_activities(limit: int = 3) -> str:
+    """Fetches the latest activities and formats them for the AI."""
+    access_token = await get_strava_access_token()
+    if not access_token: return "No Strava data available (authentication failed)."
+    
+    url = f"https://www.strava.com/api/v3/athlete/activities?per_page={limit}"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    
+    try:
+        res = await asyncio.to_thread(requests.get, url, headers=headers, timeout=10)
+        activities = res.json()
+        
+        if not activities: return "User hasn't logged any recent activities on Strava."
+        
+        history = []
+        for act in activities:
+            name = act.get('name', 'Workout')
+            sport = act.get('sport_type', 'Activity')
+            # Strava returns distance in meters and time in seconds
+            distance_km = act.get('distance', 0) / 1000
+            time_min = act.get('moving_time', 0) // 60
+            hr = act.get('average_heartrate', 'N/A')
+            
+            history.append(f"- {sport}: '{name}' ({distance_km:.1f}km in {time_min} mins. Avg HR: {hr} bpm)")
+            
+        return "\n".join(history)
+    except Exception as e:
+        logger.error(f"❌ Strava Fetch Error: {e}")
+        return "Could not fetch recent Strava history."
+
 # ==========================================
 # 5. HEALTH CHECK SERVER (RENDER KEEP-AWAKE)
 # ==========================================
@@ -170,6 +223,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /grocery_empty - Clear the list\n"
         "• /decide [A], [B] - Settle an argument\n"
         "• /recipe [ingredients] - Empty fridge chef\n\n"
+        "<b>💪 Health & Fitness</b>\n"
+        "• /train [sport] [specs] - AI tailored workout\n\n"
         "<b>🎉 Fun & Extras</b>\n"
         "• /cat - Instant feline dopamine\n"
         "• /dateidea [city] - Generate a date idea\n"
@@ -487,6 +542,56 @@ async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=None
         )
 
+async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /train")
+    
+    request_details = " ".join(context.args)
+    if not request_details:
+        await update.message.reply_text(
+            "⚠️ <b>Usage:</b> /train [Sport] [Specifications]\n"
+            "<i>Examples:</i>\n"
+            "• /train running easy 5k\n"
+            "• /train gym push day hypertrophy\n"
+            "• /train swimming sprint intervals", 
+            parse_mode=ParseMode.HTML
+        )
+        return
+        
+    status_msg = await update.message.reply_text("🏃‍♂️ <i>Syncing with Strava and designing your workout...</i>", parse_mode=ParseMode.HTML)
+    
+    # Fetch recent history to give the AI context!
+    history_text = await get_recent_strava_activities(limit=3)
+    
+    prompt = f"""
+    You are an elite, highly knowledgeable personal trainer. 
+    Your client wants a tailored workout.
+    
+    CLIENT REQUEST:
+    They want to do a workout focusing on: {request_details}
+    
+    CLIENT'S RECENT STRAVA HISTORY (for context on fatigue/recent volume):
+    {history_text}
+    
+    CRITICAL RULES:
+    1. Analyze their recent history. If they just did a massive run yesterday and are asking for a hard run today, advise them to take it easy or suggest recovery variations.
+    2. Provide a structured, tailored workout plan based strictly on their request ({request_details}).
+    3. Include a Warm-up, the Main Set, and a Cool-down.
+    4. Format the output cleanly using basic HTML tags like <b> and <i>. 
+    5. ABSOLUTELY NO MARKDOWN (*, **, #). Use standard numbers or bullet points (•) for lists.
+    6. Keep the tone motivating but scientifically sound. Max 3 emojis.
+    """
+    
+    workout = await ask_llm(prompt)
+    try:
+        await status_msg.edit_text(workout, parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.error(f"❌ HTML Parsing Error in Train: {e}")
+        await status_msg.edit_text(
+            f"🏃‍♂️ <b>Here is your workout!</b> (<i>Formatting disabled due to AI glitch</i>):\n\n{workout}", 
+            parse_mode=None
+        )
+
 # --- Fun & Extras ---
 
 async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -600,6 +705,7 @@ if __name__ == "__main__":
                 app.add_handler(CommandHandler("grocery_empty", grocery_empty_command))
                 app.add_handler(CommandHandler("decide", decide_command))
                 app.add_handler(CommandHandler("recipe", recipe_command))
+                app.add_handler(CommandHandler("train", train_command))
                 
                 # --- Fun & Extras ---
                 app.add_handler(CommandHandler("dateidea", dateidea_command))
