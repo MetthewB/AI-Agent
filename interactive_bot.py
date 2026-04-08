@@ -2,6 +2,7 @@ import os
 import re
 import time
 import random
+import certifi
 import asyncio
 import logging
 import datetime
@@ -66,9 +67,15 @@ WMO_WEATHER_CODES = {
 }
 
 if MONGO_URI:
-    mongo_client = MongoClient(MONGO_URI)
-    db = mongo_client["mattoubot_db"]
-    grocery_collection = db["groceries"]
+    try:
+        mongo_client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
+        db = mongo_client["mattoubot_db"]
+        grocery_collection = db["groceries"]
+        
+        mongo_client.admin.command('ping')
+        logger.info("✅ MongoDB Connection Successful!")
+    except Exception as e:
+        logger.error(f"❌ MongoDB Initial Connection Failed: {e}")
 else:
     logger.warning("⚠️ MONGO_URI is missing! Groceries won't be saved.")
 
@@ -147,7 +154,7 @@ async def get_strava_access_token() -> str:
         return None
 
 async def get_recent_strava_activities(limit: int = 5) -> str:
-    """Fetches latest activities and extracts Coros Training Load from descriptions."""
+    """Fetches latest activities and extracts all data including duration and Coros Load."""
     access_token = await get_strava_access_token()
     if not access_token: return "No Strava data available."
     
@@ -165,6 +172,9 @@ async def get_recent_strava_activities(limit: int = 5) -> str:
             desc = act.get('description', '') or ''
             date_str = act.get('start_date_local', 'Unknown Date')[:10]
             dist = act.get('distance', 0) / 1000
+            moving_time_sec = act.get('moving_time', 0)
+            duration_min = moving_time_sec // 60
+            
             hr = act.get('average_heartrate', 'N/A')
             
             coros_load = "Unknown"
@@ -175,7 +185,7 @@ async def get_recent_strava_activities(limit: int = 5) -> str:
 
             history.append(
                 f"- {date_str} | Title: '{name}' | Dist: {dist:.1f}km | "
-                f"Avg HR: {hr} | Coros Training Load: {coros_load}"
+                f"Duration: {duration_min} mins | Avg HR: {hr} | Coros Load: {coros_load}"
             )
             
         return "\n".join(history)
@@ -612,8 +622,8 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     <b>📊 Recent Training History</b>
     (Convert the dates from the Strava History to DD/MM format. If there is no distance, leave it out.)
-    • [Date (DD/MM)]: [Sport] - [Distance if applicable] - [Duration]
-    • [Date (DD/MM)]: [Sport] - [Distance if applicable] - [Duration]
+    • [Date (DD/MM)]: [Sport] - [Distance]km - [Duration] mins
+    • [Date (DD/MM)]: [Sport] - [Distance]km - [Duration] mins
     
     <b>🎯 [Insert Catchy Workout Title]</b>
     

@@ -10,3 +10,4 @@ lxml
 huggingface-hub
 apscheduler
 pymongo>=3.12
+certifi
