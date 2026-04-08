@@ -12,6 +12,7 @@ import requests
 import yfinance as yf
 from bs4 import BeautifulSoup
 from huggingface_hub import AsyncInferenceClient
+from pymongo import MongoClient
 from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
 from telegram.constants import ParseMode
@@ -31,6 +32,7 @@ CHAT_ID_ENV = os.environ.get("TELEGRAM_CHAT_ID", "0")
 STRAVA_CLIENT_ID = os.environ.get("STRAVA_CLIENT_ID")
 STRAVA_CLIENT_SECRET = os.environ.get("STRAVA_CLIENT_SECRET")
 STRAVA_REFRESH_TOKEN = os.environ.get("STRAVA_REFRESH_TOKEN")
+MONGO_URI = os.environ.get("MONGO_URI")
 
 AUTHORIZED_USERS = []
 for uid in CHAT_ID_ENV.split(","):
@@ -62,6 +64,13 @@ WMO_WEATHER_CODES = {
     80: "Light showers", 81: "Moderate showers", 82: "Heavy showers",
     95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Heavy thunderstorm"
 }
+
+if MONGO_URI:
+    mongo_client = MongoClient(MONGO_URI)
+    db = mongo_client["mattoubot_db"]
+    grocery_collection = db["groceries"]
+else:
+    logger.warning("⚠️ MONGO_URI is missing! Groceries won't be saved.")
 
 # ==========================================
 # 4. CORE UTILITY FUNCTIONS
@@ -465,20 +474,21 @@ async def grocery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if not item:
         try:
-            with open(GROCERY_FILE, "r") as f:
-                items = f.read().splitlines()
+            items_cursor = grocery_collection.find()
+            items = [doc["item"] for doc in items_cursor]
+            
             if not items:
                 await update.message.reply_text("🛒 <b>The grocery list is currently empty!</b>", parse_mode=ParseMode.HTML)
             else:
                 formatted_list = "\n".join([f"• {i}" for i in items])
                 await update.message.reply_text(f"🛒 <b>Shared Shopping List:</b>\n\n{formatted_list}", parse_mode=ParseMode.HTML)
-        except FileNotFoundError:
-            await update.message.reply_text("🛒 <b>The grocery list is currently empty!</b>", parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.error(f"❌ Grocery Read Error: {e}")
+            await update.message.reply_text("⚠️ <i>Failed to read the list from the database!</i>", parse_mode=ParseMode.HTML)
         return
 
     try:
-        with open(GROCERY_FILE, "a") as f:
-            f.write(item + "\n")
+        grocery_collection.insert_one({"item": item})
         await update.message.reply_text(f"✅ Added <b>{item}</b> to the list!", parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"❌ Grocery Add Error: {e}")
@@ -487,15 +497,17 @@ async def grocery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def grocery_empty_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     logger.info(f"▶️ User {update.effective_chat.id} triggered /grocery_empty")
+    
     try:
-        if os.path.exists(GROCERY_FILE):
-            os.remove(GROCERY_FILE)
-            await update.message.reply_text("🧹 <b>Grocery list cleared!</b> Happy cooking! 🍳", parse_mode=ParseMode.HTML)
+        result = grocery_collection.delete_many({})
+        
+        if result.deleted_count > 0:
+            await update.message.reply_text(f"🧹 <b>Grocery list cleared!</b> ({result.deleted_count} items removed) Happy cooking! 🍳", parse_mode=ParseMode.HTML)
         else:
             await update.message.reply_text("🛒 <b>The list was already empty!</b>", parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"❌ Grocery Clear Error: {e}")
-        await update.message.reply_text("⚠️ <i>Failed to clear the list!</i>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text("⚠️ <i>Failed to clear the database!</i>", parse_mode=ParseMode.HTML)
 
 async def decide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
@@ -583,7 +595,7 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     CLIENT'S RECENT STRAVA HISTORY (Format: YYYY-MM-DD):
     {history_text}
     
-    SPORT SCIENCE & FATIGUE RULES:
+    SPORT SCIENCE & FATIGUE RULES (Apply these SILENTLY to design the workout, do NOT explain them in the output):
     1. Cross-Training Intelligence: You MUST differentiate between Local Fatigue (specific muscles) and Systemic Fatigue (cardiovascular).
        - If they did an upper-body "Push" or "Pull" day recently, their legs and cardio are FRESH. Do not penalize running or cycling.
        - If they did a heavy "Leg Day" yesterday, running or cycling today should be modified for active recovery.
@@ -598,8 +610,10 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     REQUIRED OUTPUT STRUCTURE (You MUST use these exact headings in this precise order):
     
-    <b>📊 Coach's Analysis</b>
-    [1 to 2 sentences analyzing their history, true rest days, and cross-training readiness based on muscle groups vs. cardio]
+    <b>📊 Recent Training History</b>
+    (Convert the dates from the Strava History to DD/MM format. If there is no distance, leave it out.)
+    • [Date (DD/MM)]: [Sport] - [Distance if applicable] - [Duration]
+    • [Date (DD/MM)]: [Sport] - [Distance if applicable] - [Duration]
     
     <b>🎯 [Insert Catchy Workout Title]</b>
     
@@ -640,7 +654,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     # Calculate the exact timestamp for 7 days ago
     seven_days_ago = int(time.time()) - (7 * 24 * 3600)
     
-    # We use the 'after' parameter to fetch only this week's activities
+    # Fetch only this week's activities
     url = f"https://www.strava.com/api/v3/athlete/activities?after={seven_days_ago}&per_page=30"
     headers = {"Authorization": f"Bearer {access_token}"}
     
@@ -652,32 +666,70 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await status_msg.edit_text("📊 <b>Weekly Stats</b>\n\nYou haven't logged any activities in the last 7 days. Time to get moving! 🏃‍♂️💨", parse_mode=ParseMode.HTML)
             return
             
-        total_distance = 0
         total_time = 0
         total_load = 0
         activity_count = len(activities)
         
+        # A dictionary to track stats PER SPORT
+        sport_stats = {}
+        
         for act in activities:
-            total_distance += act.get('distance', 0) / 1000
-            total_time += act.get('moving_time', 0) / 60
+            sport = act.get('sport_type', 'Activity')
+            dist_km = act.get('distance', 0) / 1000
+            time_min = act.get('moving_time', 0) / 60
             
             # Extract Coros Load if it exists
             desc = act.get('description', '') or ''
+            act_load = 0
             if "charge d'entraînement" in desc:
                 match = re.search(r'(\d+)\s*charge', desc)
-                if match:
-                    total_load += int(match.group(1))
+                if match: act_load = int(match.group(1))
 
+            total_time += time_min
+            total_load += act_load
+            
+            # Initialize the sport in our dictionary if we haven't seen it yet
+            if sport not in sport_stats:
+                sport_stats[sport] = {'count': 0, 'distance': 0, 'time': 0, 'load': 0}
+                
+            sport_stats[sport]['count'] += 1
+            sport_stats[sport]['distance'] += dist_km
+            sport_stats[sport]['time'] += time_min
+            sport_stats[sport]['load'] += act_load
+
+        # Format Global Time
         hrs = int(total_time // 60)
         mins = int(total_time % 60)
         
-        # Build the stats payload
-        stats_text = (
-            f"• <b>Workouts:</b> {activity_count}\n"
-            f"• <b>Distance:</b> {total_distance:.1f} km\n"
-            f"• <b>Active Time:</b> {hrs}h {mins}m\n"
-            f"• <b>Total Coros Load:</b> {total_load}\n"
-        )
+        # Build the neat Global Stats Header
+        stats_lines = [
+            f"<b>Total Workouts:</b> {activity_count}",
+            f"<b>Total Active Time:</b> {hrs}h {mins}m"
+        ]
+        if total_load > 0:
+            stats_lines.append(f"<b>Total Coros Load:</b> {total_load}")
+            
+        stats_lines.append("\n<b>🏅 Breakdown by Sport:</b>")
+        
+        # Build the dynamic per-sport list
+        for sport, data in sport_stats.items():
+            s_hrs = int(data['time'] // 60)
+            s_mins = int(data['time'] % 60)
+            time_str = f"{s_hrs}h {s_mins}m" if s_hrs > 0 else f"{s_mins}m"
+            
+            line = f"• <b>{sport}:</b> {data['count']} session(s) | {time_str}"
+            
+            # Only show distance if they actually covered ground (skips gym sessions)
+            if data['distance'] > 0:
+                line += f" | {data['distance']:.1f} km"
+                
+            # Only show Coros Load if it registered one
+            if data['load'] > 0:
+                line += f" | Load: {data['load']}"
+                
+            stats_lines.append(line)
+            
+        stats_text = "\n".join(stats_lines)
         
         # Ask the AI to act as a coach doing a weekly review
         prompt = f"""
@@ -686,24 +738,25 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {stats_text}
         
         CRITICAL RULES:
-        1. Write a short, 2-sentence encouraging weekly performance review.
-        2. Analyze the 'Total Coros Load': If it is > 400, strictly advise them to prioritize recovery or stretching this weekend. If it's < 100, gently tease them to push a bit harder next week. If it is in between, praise their consistency.
-        3. Format the output cleanly using ONLY basic HTML tags like <b> and <i>. 
-        4. ABSOLUTELY NO MARKDOWN (*, **, #). Max 2 emojis.
-        5. FORBIDDEN HTML: Do NOT invent fake tags like <emoji>. Do NOT use <ol>, <ul>, <li>, or <br>.
+        1. Write a short, 2-sentence encouraging weekly performance review based on their mix of sports.
+        2. SMART GYM LOGIC: If they did gym/weight training (often labeled 'WeightTraining' or 'Workout') but have 0 Coros Load, DO NOT say they were resting. Acknowledge their hard work in the gym building strength!
+        3. If Total Coros Load > 400, strictly advise them to prioritize recovery.
+        4. Format the output cleanly using ONLY basic HTML tags like <b> and <i>. 
+        5. ABSOLUTELY NO MARKDOWN (*, **, #). Max 2 emojis.
+        6. FORBIDDEN HTML: Do NOT invent fake tags like <emoji>. Do NOT use <ol>, <ul>, <li>, or <br>.
         """
         
         ai_review = await ask_llm(prompt)
         
         # Assemble the final message
-        final_message = f"📊 <b>7-Day Performance Review</b>\n\n{stats_text}\n<b>Coach's Note:</b>\n{ai_review}"
+        final_message = f"📊 <b>7-Day Performance Review</b>\n\n{stats_text}\n\n<b>Coach's Note:</b>\n{ai_review}"
         
         try:
             await status_msg.edit_text(final_message, parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.error(f"❌ HTML Parsing Error in Stats: {e}")
             await status_msg.edit_text(
-                f"📊 <b>7-Day Performance Review</b> (<i>Formatting disabled due to AI glitch</i>):\n\n{stats_text}\nCoach's Note:\n{ai_review}", 
+                f"📊 <b>7-Day Performance Review</b> (<i>Formatting disabled due to AI glitch</i>):\n\n{stats_text}\n\nCoach's Note:\n{ai_review}", 
                 parse_mode=None
             )
             

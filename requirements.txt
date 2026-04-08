@@ -1,7 +1,6 @@
 langgraph
 langchain-huggingface
 ddgs
-#pymongo
 requests
 yfinance
 icalevents
@@ -10,3 +9,4 @@ beautifulsoup4
 lxml
 huggingface-hub
 apscheduler
+pymongo>=3.12
