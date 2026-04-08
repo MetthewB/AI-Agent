@@ -137,10 +137,10 @@ async def get_strava_access_token() -> str:
         logger.error(f"❌ Strava Token Error: {e}")
         return None
 
-async def get_recent_strava_activities(limit: int = 3) -> str:
-    """Fetches the latest activities and formats them for the AI."""
+async def get_recent_strava_activities(limit: int = 5) -> str:
+    """Fetches latest activities and extracts Coros Training Load from descriptions."""
     access_token = await get_strava_access_token()
-    if not access_token: return "No Strava data available (authentication failed)."
+    if not access_token: return "No Strava data available."
     
     url = f"https://www.strava.com/api/v3/athlete/activities?per_page={limit}"
     headers = {"Authorization": f"Bearer {access_token}"}
@@ -148,25 +148,31 @@ async def get_recent_strava_activities(limit: int = 3) -> str:
     try:
         res = await asyncio.to_thread(requests.get, url, headers=headers, timeout=10)
         activities = res.json()
-        
-        if not activities: return "User hasn't logged any recent activities on Strava."
+        if not activities: return "No recent history."
         
         history = []
         for act in activities:
             name = act.get('name', 'Workout')
-            sport = act.get('sport_type', 'Activity')
+            desc = act.get('description', '') or ''
             date_str = act.get('start_date_local', 'Unknown Date')[:10]
-            
-            distance_km = act.get('distance', 0) / 1000
-            time_min = act.get('moving_time', 0) // 60
+            dist = act.get('distance', 0) / 1000
             hr = act.get('average_heartrate', 'N/A')
             
-            history.append(f"- {date_str} | {sport}: '{name}' ({distance_km:.1f}km in {time_min} mins. Avg HR: {hr} bpm)")
+            coros_load = "Unknown"
+            if "charge d'entraînement" in desc:
+                match = re.search(r'(\d+)\s*charge', desc)
+                if match:
+                    coros_load = match.group(1)
+
+            history.append(
+                f"- {date_str} | Title: '{name}' | Dist: {dist:.1f}km | "
+                f"Avg HR: {hr} | Coros Training Load: {coros_load}"
+            )
             
         return "\n".join(history)
     except Exception as e:
         logger.error(f"❌ Strava Fetch Error: {e}")
-        return "Could not fetch recent Strava history."
+        return "Could not fetch Strava history."
 
 # ==========================================
 # 5. HEALTH CHECK SERVER (RENDER KEEP-AWAKE)
@@ -225,7 +231,8 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /decide [A], [B] - Settle an argument\n"
         "• /recipe [ingredients] - Empty fridge chef\n\n"
         "<b>💪 Health & Fitness</b>\n"
-        "• /train [sport] [specs] - AI tailored workout\n\n"
+        "• /train [sport] [specs] - AI tailored workout\n"
+        "• /stats - Weekly performance review\n\n"
         "<b>🎉 Fun & Extras</b>\n"
         "• /cat - Instant feline dopamine\n"
         "• /dateidea [city] - Generate a date idea\n"
@@ -571,19 +578,42 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     - Today's Date: {current_date}
     
     CLIENT REQUEST:
-    They want to do a workout focusing on: {request_details}
+    Focus: {request_details}
     
     CLIENT'S RECENT STRAVA HISTORY (Format: YYYY-MM-DD):
     {history_text}
     
-    CRITICAL RULES:
-    1. Look EXACTLY at the dates in the history and compare them mathematically to Today's Date ({current_date}). Calculate the actual days of rest they have had. Do NOT assume a workout was yesterday unless the dates are exactly 1 day apart.
-    2. Provide a structured, tailored workout plan based strictly on their request ({request_details}), adapting the intensity based on true rest days.
-    3. Include a Warm-up, the Main Set, and a Cool-down.
-    4. Format the output cleanly using ONLY basic HTML tags like <b> and <i>. 
-    5. ABSOLUTELY NO MARKDOWN (*, **, #). Use standard numbers or bullet points (•) for lists.
-    6. Keep the tone motivating but scientifically sound. Max 3 emojis.
-    7. FORBIDDEN HTML: Do NOT invent fake tags like <emoji>. Insert emojis directly as regular text. Do NOT use <ol>, <ul>, <li>, or <br>.
+    SPORT SCIENCE & FATIGUE RULES:
+    1. Cross-Training Intelligence: You MUST differentiate between Local Fatigue (specific muscles) and Systemic Fatigue (cardiovascular).
+       - If they did an upper-body "Push" or "Pull" day recently, their legs and cardio are FRESH. Do not penalize running or cycling.
+       - If they did a heavy "Leg Day" yesterday, running or cycling today should be modified for active recovery.
+       - If they did heavy Cardio recently, their upper body is completely fresh for weightlifting.
+    2. Date Math: Compare history dates to Today's Date ({current_date}). Calculate exact rest days. Do not assume a workout was yesterday unless the dates are exactly 1 day apart.
+    
+    FORMATTING RULES:
+    - Use ONLY basic HTML tags (<b> and <i>). 
+    - ABSOLUTELY NO MARKDOWN (*, **, #). 
+    - FORBIDDEN HTML: Do NOT invent fake tags like <emoji>. Do NOT use <ol>, <ul>, <li>, or <br>. Use standard text bullet points (•).
+    - Use exactly 3 emojis in the entire response.
+    
+    REQUIRED OUTPUT STRUCTURE (You MUST use these exact headings in this precise order):
+    
+    <b>📊 Coach's Analysis</b>
+    [1 to 2 sentences analyzing their history, true rest days, and cross-training readiness based on muscle groups vs. cardio]
+    
+    <b>🎯 [Insert Catchy Workout Title]</b>
+    
+    <b>🔥 Warm-Up</b>
+    • [Item 1]
+    • [Item 2]
+    
+    <b>⚡ Main Set</b>
+    • [Item 1]
+    • [Item 2]
+    
+    <b>🧘 Cool-Down</b>
+    • [Item 1]
+    • [Item 2]
     """
     
     workout = await ask_llm(prompt)
@@ -595,6 +625,91 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🏃‍♂️ <b>Here is your workout!</b> (<i>Formatting disabled due to AI glitch</i>):\n\n{workout}", 
             parse_mode=None
         )
+
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /stats")
+    
+    status_msg = await update.message.reply_text("📊 <i>Crunching your weekly numbers...</i>", parse_mode=ParseMode.HTML)
+    
+    access_token = await get_strava_access_token()
+    if not access_token:
+        await status_msg.edit_text("⚠️ <i>Could not connect to Strava to fetch stats.</i>", parse_mode=ParseMode.HTML)
+        return
+
+    # Calculate the exact timestamp for 7 days ago
+    seven_days_ago = int(time.time()) - (7 * 24 * 3600)
+    
+    # We use the 'after' parameter to fetch only this week's activities
+    url = f"https://www.strava.com/api/v3/athlete/activities?after={seven_days_ago}&per_page=30"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    
+    try:
+        res = await asyncio.to_thread(requests.get, url, headers=headers, timeout=10)
+        activities = res.json()
+        
+        if not activities:
+            await status_msg.edit_text("📊 <b>Weekly Stats</b>\n\nYou haven't logged any activities in the last 7 days. Time to get moving! 🏃‍♂️💨", parse_mode=ParseMode.HTML)
+            return
+            
+        total_distance = 0
+        total_time = 0
+        total_load = 0
+        activity_count = len(activities)
+        
+        for act in activities:
+            total_distance += act.get('distance', 0) / 1000
+            total_time += act.get('moving_time', 0) / 60
+            
+            # Extract Coros Load if it exists
+            desc = act.get('description', '') or ''
+            if "charge d'entraînement" in desc:
+                match = re.search(r'(\d+)\s*charge', desc)
+                if match:
+                    total_load += int(match.group(1))
+
+        hrs = int(total_time // 60)
+        mins = int(total_time % 60)
+        
+        # Build the stats payload
+        stats_text = (
+            f"• <b>Workouts:</b> {activity_count}\n"
+            f"• <b>Distance:</b> {total_distance:.1f} km\n"
+            f"• <b>Active Time:</b> {hrs}h {mins}m\n"
+            f"• <b>Total Coros Load:</b> {total_load}\n"
+        )
+        
+        # Ask the AI to act as a coach doing a weekly review
+        prompt = f"""
+        You are an elite personal trainer. Review your client's training from the last 7 days:
+        
+        {stats_text}
+        
+        CRITICAL RULES:
+        1. Write a short, 2-sentence encouraging weekly performance review.
+        2. Analyze the 'Total Coros Load': If it is > 400, strictly advise them to prioritize recovery or stretching this weekend. If it's < 100, gently tease them to push a bit harder next week. If it is in between, praise their consistency.
+        3. Format the output cleanly using ONLY basic HTML tags like <b> and <i>. 
+        4. ABSOLUTELY NO MARKDOWN (*, **, #). Max 2 emojis.
+        5. FORBIDDEN HTML: Do NOT invent fake tags like <emoji>. Do NOT use <ol>, <ul>, <li>, or <br>.
+        """
+        
+        ai_review = await ask_llm(prompt)
+        
+        # Assemble the final message
+        final_message = f"📊 <b>7-Day Performance Review</b>\n\n{stats_text}\n<b>Coach's Note:</b>\n{ai_review}"
+        
+        try:
+            await status_msg.edit_text(final_message, parse_mode=ParseMode.HTML)
+        except Exception as e:
+            logger.error(f"❌ HTML Parsing Error in Stats: {e}")
+            await status_msg.edit_text(
+                f"📊 <b>7-Day Performance Review</b> (<i>Formatting disabled due to AI glitch</i>):\n\n{stats_text}\nCoach's Note:\n{ai_review}", 
+                parse_mode=None
+            )
+            
+    except Exception as e:
+        logger.error(f"❌ Stats Fetch Error: {e}")
+        await status_msg.edit_text("⚠️ <i>Failed to fetch your weekly stats. Check the logs!</i>", parse_mode=ParseMode.HTML)
 
 # --- Fun & Extras ---
 
@@ -709,7 +824,10 @@ if __name__ == "__main__":
                 app.add_handler(CommandHandler("grocery_empty", grocery_empty_command))
                 app.add_handler(CommandHandler("decide", decide_command))
                 app.add_handler(CommandHandler("recipe", recipe_command))
+                
+                # --- Health ---
                 app.add_handler(CommandHandler("train", train_command))
+                app.add_handler(CommandHandler("stats", stats_command))
                 
                 # --- Fun & Extras ---
                 app.add_handler(CommandHandler("dateidea", dateidea_command))
