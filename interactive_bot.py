@@ -82,14 +82,14 @@ else:
 # ==========================================
 # 4. CORE UTILITY FUNCTIONS
 # ==========================================
-async def ask_llm(prompt: str) -> str:
+async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
     """Sends a prompt to the HuggingFace LLM asynchronously with a timeout."""
     try:
-        logger.info("🧠 Sending prompt to HuggingFace LLM...")
+        logger.info(f"🧠 Sending prompt to LLM (Limit: {max_tokens})...")
         messages = [{"role": "user", "content": prompt}]
         
         response = await asyncio.wait_for(
-            llm_client.chat_completion(messages=messages, max_tokens=400, temperature=0.7),
+            llm_client.chat_completion(messages=messages, max_tokens=max_tokens, temperature=0.7), 
             timeout=15.0
         )
         logger.info("✅ LLM response generated successfully.")
@@ -414,13 +414,24 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         condition = WMO_WEATHER_CODES.get(code, "mixed weather")
         
         prompt = f"""
-        The current weather in {display_name} is {temp}°C with {condition}. 
+        CONTEXT:
+        Location: {display_name}
+        Temperature: {temp}°C
+        Conditions: {condition}
+
+        TASK:
         Write a short, 2-sentence cute and slightly sassy weather report for a couple. 
         Advise them on what to wear or if it's a good day to stay inside.
-        Format the output cleanly using HTML <b> tags for the temperature. No markdown asterisks.
+
+        CRITICAL RULES:
+        1. ONLY output the 2-sentence report. 
+        2. DO NOT include any introductory text, self-corrections, or "Here is your report."
+        3. Format the temperature ({temp}°C) using HTML <b> tags. 
+        4. ABSOLUTELY NO MARKDOWN (no asterisks *).
+        5. Use exactly 2 emojis.
         """
         
-        forecast = await ask_llm(prompt)
+        forecast = await ask_llm(prompt, max_tokens=100)
         await status_msg.edit_text(f"🌍 <b>Forecast for {display_name}</b>\n\n{forecast}", parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"❌ Weather Command Error: {e}")
