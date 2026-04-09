@@ -27,6 +27,10 @@ logger = logging.getLogger(__name__)
 # ==========================================
 # 2. CONFIGURATION & VIP LIST
 # ==========================================
+from dotenv import load_dotenv
+load_dotenv()
+
+TOKEN = os.environ.get("TELEGRAM_TOKEN")
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 HF_TOKEN = os.environ.get("HF_TOKEN")
 CHAT_ID_ENV = os.environ.get("TELEGRAM_CHAT_ID", "0")
@@ -732,7 +736,6 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         stats_lines.append("\n<b>🏅 Breakdown by Sport:</b>")
         
-        # Build the dynamic per-sport list
         for sport, data in sport_stats.items():
             s_hrs = int(data['time'] // 60)
             s_mins = int(data['time'] % 60)
@@ -740,11 +743,9 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             line = f"• <b>{sport}:</b> {data['count']} session(s) | {time_str}"
             
-            # Only show distance if they actually covered ground (skips gym sessions)
             if data['distance'] > 0:
                 line += f" | {data['distance']:.1f} km"
                 
-            # Only show Coros Load if it registered one
             if data['load'] > 0:
                 line += f" | Load: {data['load']}"
                 
@@ -752,7 +753,6 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         stats_text = "\n".join(stats_lines)
         
-        # Ask the AI to act as a coach doing a weekly review
         prompt = f"""
         You are an elite personal trainer. Review your client's training from the last 7 days:
         
@@ -769,7 +769,6 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         ai_review = await ask_llm(prompt)
         
-        # Assemble the final message
         final_message = f"📊 <b>7-Day Performance Review</b>\n\n{stats_text}\n\n<b>Coach's Note:</b>\n{ai_review}"
         
         try:

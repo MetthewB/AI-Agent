@@ -1,2 +1,20 @@
+# Secrets & Environment
 .env
+
+# Python Virtual Environment & Artifacts
 venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Local Data Files
+groceries.txt
+
+# System Files
+.DS_Store
+Thumbs.db
+
+# IDE Folders
+.vscode/
+.idea/
