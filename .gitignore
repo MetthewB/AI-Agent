@@ -1,20 +1,30 @@
-# Secrets & Environment
+# === Secrets & Environment ===
 .env
-
-# Python Virtual Environment & Artifacts
+env/
 venv/
+ENV/
+
+# === Python Internal Files ===
 __pycache__/
-*.pyc
-*.pyo
-*.pyd
+*.py[cod]
+*$py.class
+*.so
+.Python
+.ipynb_checkpoints/
 
-# Local Data Files
-groceries.txt
+# === Local Data, Logs & Artifacts ===
+*.log
+*.txt
+output/
+k8s-output/
 
-# System Files
+# === IDE & System Files ===
+.vscode/
+.idea/
 .DS_Store
 Thumbs.db
 
-# IDE Folders
-.vscode/
-.idea/
+# === Setup & sensitive Utils ===
+# Keeps your one-time auth script and setup files off the public repo
+setup/
+utils/strava_auth.py
