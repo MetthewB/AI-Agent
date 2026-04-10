@@ -112,6 +112,12 @@ def is_authorized(update: Update) -> bool:
     logger.warning(f"🛑 UNAUTHORIZED ACCESS ATTEMPT from ID: {chat_id}")
     return False
 
+def get_lang_rule(context: ContextTypes.DEFAULT_TYPE) -> str:
+    """Injects a strict language rule based on the user's latest voice command."""
+    pref = context.user_data.get('lang', 'en')
+    lang_str = "French" if pref == "fr" else "English"
+    return f"\n\nCRITICAL LANGUAGE RULE:\n- Write your ENTIRE response in {lang_str}.\n- Exception: If the user's explicit input is in the other supported language (English/French), seamlessly switch to that language.\n- STRICT BAN: If the user requests content in Spanish, German, Italian, or ANY language other than English or French, DO NOT fulfill the request. Reply EXACTLY with: '⚠️ I only speak English and French!'"
+
 def parse_time_string(time_str: str) -> int:
     """Parses strings like '10', '1h30', '50s' into total seconds."""
     time_str = time_str.lower().strip()
@@ -317,6 +323,8 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         Headlines:
         {news_context}
         """
+        
+        prompt += get_lang_rule(context)
         summary = await ask_llm(prompt)
         await status_msg.edit_text(f"📰 <b>Geopolitical Briefing</b>\n\n{summary.replace('*', '')}", parse_mode=ParseMode.HTML)
     except Exception as e:
@@ -371,6 +379,7 @@ async def research_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             If you DO have the facts, provide a concise 3-sentence summary using <b> tags for important keywords. No markdown asterisks.
             """
             
+        prompt += get_lang_rule(context)
         analysis = await ask_llm(prompt)
         await status_msg.edit_text(f"📝 <b>Research Summary: {query}</b>\n\n{analysis.replace('*', '')}", parse_mode=ParseMode.HTML)
     except Exception as e:
@@ -382,12 +391,13 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"▶️ User {update.effective_chat.id} triggered /weather")
     
     city_query = " ".join(context.args)
+    headers = {"User-Agent": "MattouBot/1.0 (Telegram Assistant)"}
     
     if city_query:
         status_msg = await update.message.reply_text(f"<i>Looking for {city_query} on the map...</i> 🌍", parse_mode=ParseMode.HTML)
         geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_query}&count=1&language=en&format=json"
         try:
-            geo_res = await asyncio.to_thread(requests.get, geo_url, timeout=10)
+            geo_res = await asyncio.to_thread(requests.get, geo_url, headers=headers, timeout=10)
             geo_data = geo_res.json()
             if "results" not in geo_data:
                 await status_msg.edit_text(f"⚠️ <i>I couldn't find a city named '<b>{city_query}</b>'. Did you make a typo?</i>", parse_mode=ParseMode.HTML)
@@ -406,28 +416,20 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         display_name = "Lausanne, Switzerland"
         lat, lon = 46.5197, 6.6323
 
-    # 1. Use the modern API format
     weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code"
     
-    # 2. Add a Custom User-Agent so Open-Meteo knows we aren't a spam bot
-    headers = {"User-Agent": "MattouBot/1.0 (Telegram Assistant)"}
-    
     try:
-        # 3. Pass the headers into the request
         res = await asyncio.to_thread(requests.get, weather_url, headers=headers, timeout=10)
         data = res.json()
         
-        # 4. Check if the API threw an error explicitly
         if "error" in data:
             logger.error(f"❌ Open-Meteo API Error: {data}")
             await status_msg.edit_text("⚠️ <i>The weather radar is blocking my connection!</i>", parse_mode=ParseMode.HTML)
             return
             
-        # 5. Parse the new modern JSON structure
         current = data['current']
         temp = current['temperature_2m']
-        code = current['weather_code'] # Notice the underscore here!
-        
+        code = current['weather_code']
         condition = WMO_WEATHER_CODES.get(code, "mixed weather")
         
         prompt = f"""
@@ -448,6 +450,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         5. Use exactly 2 emojis.
         """
         
+        prompt += get_lang_rule(context)
         forecast = await ask_llm(prompt, max_tokens=100)
         await status_msg.edit_text(f"🌍 <b>Forecast for {display_name}</b>\n\n{forecast}", parse_mode=ParseMode.HTML)
     except Exception as e:
@@ -620,6 +623,7 @@ async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     5. FORBIDDEN MARKDOWN: Do NOT use markdown asterisks (* or **). 
     6. Keep the tone encouraging and culinary.
     """
+    prompt += get_lang_rule(context)
     recipe_output = await ask_llm(prompt)
     try:
         await status_msg.edit_text(recipe_output, parse_mode=ParseMode.HTML)
@@ -698,6 +702,7 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     • [Item 2]
     """
     
+    prompt += get_lang_rule(context)
     workout = await ask_llm(prompt)
     try:
         await status_msg.edit_text(workout, parse_mode=ParseMode.HTML)
@@ -810,6 +815,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         6. FORBIDDEN HTML: Do NOT invent fake tags like <emoji>. Do NOT use <ol>, <ul>, <li>, or <br>.
         """
         
+        prompt += get_lang_rule(context)
         ai_review = await ask_llm(prompt)
         
         final_message = f"📊 <b>7-Day Performance Review</b>\n\n{stats_text}\n\n<b>Coach's Note:</b>\n{ai_review}"
@@ -838,9 +844,10 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_date = datetime.datetime.now().strftime("%A, %B %d, %Y")
     
     if location_query:
+        headers = {"User-Agent": "MattouBot/1.0 (Telegram Assistant)"}
         geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={location_query}&count=1&language=en&format=json"
         try:
-            geo_res = await asyncio.to_thread(requests.get, geo_url, timeout=10)
+            geo_res = await asyncio.to_thread(requests.get, geo_url, headers=headers, timeout=10)
             geo_data = geo_res.json()
             if "results" not in geo_data:
                 await status_msg.edit_text(f"⚠️ <i>I couldn't find a place named '<b>{location_query}</b>'. Did you make a typo?</i>", parse_mode=ParseMode.HTML)
@@ -894,6 +901,7 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     5. EXACTLY 2 or 3 emojis must be used in your entire response. No more, no less.
     """
     
+    prompt += get_lang_rule(context)
     idea = await ask_llm(prompt) 
     await status_msg.edit_text(idea, parse_mode=ParseMode.HTML)
 
@@ -927,7 +935,6 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "Content-Type": "audio/ogg"
         }
         
-        # We send the raw bytes directly to the API
         res = await asyncio.to_thread(requests.post, API_URL, headers=headers, data=audio_bytes, timeout=20)
         
         if res.status_code != 200:
@@ -950,9 +957,10 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         Map the user's intent to one OR MORE of the available commands below.
         
-        CRITICAL RULES FOR ARGS:
+        CRITICAL RULES FOR ARGS & LANGUAGE:
         1. Extract ONLY the exact parameters needed. Do NOT include filler words or full sentences.
-        2. If the user speaks French, translate the intent, but keep city names or specific items intact.
+        2. Detect the language of the transcription. Set the "lang" key to "fr" for French, or "en" for English.
+        3. IF THE TRANSCRIPTION IS IN SPANISH, GERMAN, ITALIAN, OR ANY OTHER LANGUAGE, set "command" to "unsupported_language" and leave args empty.
         
         AVAILABLE COMMANDS & ARGUMENT RULES:
         - train: args = ["sport", "details"] (e.g., ["running", "10km easy"])
@@ -960,28 +968,26 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         - news: args = [] (No args)
         - portfolio: args = [] (No args)
         - recipe: args = ["ingredient1", "ingredient2"] 
-        - stats: args = [] (No args)
-        - cat: args = [] (No args)
-        - dateidea: args = ["city"] (e.g., ["Geneva"])
-        
-        GROCERY COMMAND RULES (PAY CLOSE ATTENTION):
         - grocery: 
             - If they ask to READ, CHECK, or SEE the list: args = [] (Must be empty!)
             - If they ask to ADD an item to the list: args = ["item name"]
         - grocery_remove: 
             - If they ask to REMOVE, DELETE, or TAKE OFF an item: args = ["item name"]
+        - stats: args = [] (No args)
+        - cat: args = [] (No args)
+        - dateidea: args = ["city"] (e.g., ["Geneva"])
             
         Return ONLY a valid JSON list of dictionaries. No markdown formatting, no explanation, no extra text.
         
         EXAMPLE 1 - "Quel est le temps à Lausanne et donne moi les infos":
         [
-          {{"command": "weather", "args": ["Lausanne"]}},
-          {{"command": "news", "args": []}}
+          {{"command": "weather", "args": ["Lausanne"], "lang": "fr"}},
+          {{"command": "news", "args": [], "lang": "fr"}}
         ]
         
-        EXAMPLE 2 - "Enlève les œufs de la liste de courses":
+        EXAMPLE 2 - "Remove eggs from the grocery list":
         [
-          {{"command": "grocery_remove", "args": ["œufs"]}}
+          {{"command": "grocery_remove", "args": ["eggs"], "lang": "en"}}
         ]
         """
         
@@ -1001,9 +1007,8 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await status_msg.edit_text(f"🗣️ <b>You said:</b> <i>\"{transcription}\"</i>\n💬 I heard you, but I didn't detect any specific commands to run!", parse_mode=ParseMode.HTML)
             return
 
-        await status_msg.delete() # Clean up the status message
+        await status_msg.delete()
         
-        # 4. Map strings to your actual Python functions
         command_map = {
             "train": train_command,
             "weather": weather_command,
@@ -1020,10 +1025,19 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 5. Execute the commands!
         for cmd in commands_to_run:
             cmd_name = cmd.get("command", "").replace("/", "")
+            
+            # Reject wrong languages immediately
+            if cmd_name == "unsupported_language":
+                await update.message.reply_text("⚠️ <i>I only understand English and French! / Je ne comprends que l'anglais et le français !</i>", parse_mode=ParseMode.HTML)
+                continue
+                
             args = cmd.get("args", [])
+            lang = cmd.get("lang", "en")
+            
+            # Save their language preference so subsequent typed commands stay in the same language!
+            context.user_data["lang"] = lang
             
             if cmd_name in command_map:
-                # Inject the parsed arguments into the context so your existing functions think it was a typed command!
                 context.args = args 
                 await command_map[cmd_name](update, context)
             else:
