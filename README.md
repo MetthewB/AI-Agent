@@ -72,4 +72,3 @@ The scheduled jobs are completely serverless and executed via `.github/workflows
 For users requiring self-hosted or bare-metal deployments, this repository retains legacy infrastructure manifests.
 - Use `docker-compose up --build` for containerized local execution.
 - The `k8s/` directory contains manifests for deploying the application and database to a Kubernetes cluster utilizing a `StatefulSet` and a timezone-aware `CronJob`.
-```

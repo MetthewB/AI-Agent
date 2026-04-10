@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import json
 import random
 import certifi
 import asyncio
@@ -15,7 +16,7 @@ from bs4 import BeautifulSoup
 from huggingface_hub import AsyncInferenceClient
 from pymongo import MongoClient
 from telegram import Update
-from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes
 from telegram.constants import ParseMode
 
 # ==========================================
@@ -862,6 +863,110 @@ async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         logger.error(f"❌ Cat API error: {e}")
         await update.message.reply_text("<i>The cats are sleeping.</i> 😴", parse_mode=ParseMode.HTML)
 
+async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
+    logger.info(f"🎤 Voice message received from {update.effective_chat.id}")
+
+    status_msg = await update.message.reply_text("🗣️ <i>Listening...</i>", parse_mode=ParseMode.HTML)
+
+    try:
+        # 1. Download the voice note (Telegram uses .ogg format)
+        voice_file = await update.message.voice.get_file()
+        audio_bytes = await voice_file.download_as_bytearray()
+
+        # 2. Transcribe using Hugging Face's Free Whisper Model
+        API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
+        headers = {"Authorization": f"Bearer {HF_TOKEN}"}
+        
+        # We send the raw bytes directly to the API
+        res = await asyncio.to_thread(requests.post, API_URL, headers=headers, data=audio_bytes, timeout=20)
+        
+        if res.status_code != 200:
+            logger.error(f"Whisper API Error: {res.text}")
+            await status_msg.edit_text("⚠️ <i>My ears are clogged (Whisper API error). Try typing!</i>", parse_mode=ParseMode.HTML)
+            return
+            
+        transcription = res.json().get("text", "").strip()
+
+        if not transcription:
+            await status_msg.edit_text("⚠️ <i>I couldn't hear anything clearly. Could you speak up?</i>", parse_mode=ParseMode.HTML)
+            return
+
+        await status_msg.edit_text(f"🗣️ <b>You said:</b> <i>\"{transcription}\"</i>\n🧠 <i>Routing commands...</i>", parse_mode=ParseMode.HTML)
+
+        # 3. Route intent using Qwen
+        prompt = f"""
+        You are an intelligent API router. Read this transcribed voice message: "{transcription}"
+        
+        Map the user's intent to one OR MORE of these available commands:
+        - train (requires args: sport and specifications)
+        - weather (requires args: city name)
+        - news (no args)
+        - portfolio (no args)
+        - recipe (requires args: ingredients)
+        - grocery (requires args: item to add)
+        - stats (no args)
+        - cat (no args)
+        - dateidea (requires args: city name)
+        
+        Return ONLY a valid JSON list of dictionaries. No markdown formatting, no explanation, no extra text.
+        
+        Example format:
+        [
+          {{"command": "train", "args": ["running", "10km"]}},
+          {{"command": "weather", "args": ["Paris"]}}
+        ]
+        
+        If it is just casual chatter and matches no commands, return an empty list: []
+        """
+        
+        routing_response = await ask_llm(prompt, max_tokens=200)
+        
+        # Clean up in case the LLM tries to wrap the JSON in markdown blocks
+        routing_response = routing_response.replace("```json", "").replace("```", "").strip()
+        
+        try:
+            commands_to_run = json.loads(routing_response)
+        except json.JSONDecodeError:
+            logger.error(f"❌ JSON Parse Error from LLM: {routing_response}")
+            await status_msg.edit_text("⚠️ <i>I understood the words, but my brain failed to map the commands!</i>", parse_mode=ParseMode.HTML)
+            return
+
+        if not commands_to_run:
+            await status_msg.edit_text(f"🗣️ <b>You said:</b> <i>\"{transcription}\"</i>\n💬 I heard you, but I didn't detect any specific commands to run!", parse_mode=ParseMode.HTML)
+            return
+
+        await status_msg.delete() # Clean up the status message
+        
+        # 4. Map strings to your actual Python functions
+        command_map = {
+            "train": train_command,
+            "weather": weather_command,
+            "news": news_command,
+            "portfolio": portfolio_command,
+            "recipe": recipe_command,
+            "grocery": grocery_command,
+            "stats": stats_command,
+            "cat": cat_command,
+            "dateidea": dateidea_command
+        }
+
+        # 5. Execute the commands!
+        for cmd in commands_to_run:
+            cmd_name = cmd.get("command", "").replace("/", "")
+            args = cmd.get("args", [])
+            
+            if cmd_name in command_map:
+                # Inject the parsed arguments into the context so your existing functions think it was a typed command!
+                context.args = args 
+                await command_map[cmd_name](update, context)
+            else:
+                await update.message.reply_text(f"⚠️ <i>Command '{cmd_name}' recognized by AI but not programmed yet.</i>", parse_mode=ParseMode.HTML)
+
+    except Exception as e:
+        logger.error(f"❌ Voice Handler Error: {e}")
+        await status_msg.edit_text("⚠️ <i>An error occurred while processing your voice.</i>", parse_mode=ParseMode.HTML)
+
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     logger.error(f"❌ Telegram API Error: {context.error}")
 
@@ -905,6 +1010,9 @@ if __name__ == "__main__":
                 # --- Fun & Extras ---
                 app.add_handler(CommandHandler("dateidea", dateidea_command))
                 app.add_handler(CommandHandler("cat", cat_command))
+
+                # --- Voice Integration ---
+                app.add_handler(MessageHandler(filters.VOICE, voice_handler))
                 
                 app.add_error_handler(error_handler)
                 
