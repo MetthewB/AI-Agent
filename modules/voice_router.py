@@ -133,16 +133,13 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # 5. Execute the commands!
         for cmd in commands_to_run:
             cmd_name = cmd.get("command", "").replace("/", "")
+            args = cmd.get("args", [])
+            lang = cmd.get("lang", "en").lower()
             
-            # Reject wrong languages immediately
-            if cmd_name == "unsupported_language":
+            if cmd_name == "unsupported_language" or lang not in ["en", "fr"]:
                 await update.message.reply_text("⚠️ <i>I only understand English and French! / Je ne comprends que l'anglais et le français !</i>", parse_mode=ParseMode.HTML)
                 continue
-                
-            args = cmd.get("args", [])
-            lang = cmd.get("lang", "en")
             
-            # Save their language preference so subsequent typed commands stay in the same language!
             context.user_data["lang"] = lang
             
             if cmd_name in command_map:

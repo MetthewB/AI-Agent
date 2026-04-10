@@ -34,7 +34,12 @@ def get_lang_rule(context: ContextTypes.DEFAULT_TYPE) -> str:
     """Injects a strict language rule based on the user's latest voice command."""
     pref = context.user_data.get('lang', 'en')
     lang_str = "French" if pref == "fr" else "English"
-    return f"\n\nCRITICAL LANGUAGE RULE:\n- Write your ENTIRE response in {lang_str}.\n- Exception: If the user's explicit input is in the other supported language (English/French), seamlessly switch to that language.\n- STRICT BAN: If the user requests content in Spanish, German, Italian, or ANY language other than English or French, DO NOT fulfill the request. Reply EXACTLY with: '⚠️ I only speak English and French!'"
+    return (
+        f"\n\nCRITICAL LANGUAGE RULE:\n"
+        f"- You MUST write your ENTIRE response in {lang_str}.\n"
+        f"- ABSOLUTE BAN: If the user's prompt is in Spanish, German, Italian, or ANY language other than English or French, you MUST NOT fulfill the request. "
+        f"You must ABORT the task and reply EXACTLY and ONLY with the phrase: '⚠️ I only speak English and French!'"
+    )
 
 def parse_time_string(time_str: str) -> int:
     """Parses strings like '10', '1h30', '50s' into total seconds."""
@@ -390,10 +395,17 @@ async def grocery_remove_command(update: Update, context: ContextTypes.DEFAULT_T
             await update.message.reply_text("🛒 <b>The list is already empty!</b>", parse_mode=ParseMode.HTML)
             return
         
-        matches = difflib.get_close_matches(item_to_remove, current_items, n=1, cutoff=0.3)
+        best_match = None
+        substring_matches = [i for i in current_items if item_to_remove.lower() in i.lower()]
         
-        if matches:
-            best_match = matches[0]
+        if substring_matches:
+            best_match = substring_matches[0]
+        else:
+            matches = difflib.get_close_matches(item_to_remove, current_items, n=1, cutoff=0.3)
+            if matches:
+                best_match = matches[0]
+        
+        if best_match:
             grocery_collection.delete_one({"item": best_match})
             await update.message.reply_text(f"✅ Removed <b>{best_match}</b> from the list!", parse_mode=ParseMode.HTML)
         else:
