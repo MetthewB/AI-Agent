@@ -4,6 +4,7 @@ import logging
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from modules.database import init_db
 
 # Import your Configuration & VIP Token
 from modules.config import TOKEN
@@ -44,6 +45,7 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
 
     threading.Thread(target=run_health_check, daemon=True).start()
+    init_db()
     
     if not TOKEN:
         logger.error("❌ TELEGRAM_TOKEN missing!")
