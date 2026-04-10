@@ -32,7 +32,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
-TOKEN = os.environ.get("TELEGRAM_TOKEN")
 HF_TOKEN = os.environ.get("HF_TOKEN")
 CHAT_ID_ENV = os.environ.get("TELEGRAM_CHAT_ID", "0")
 STRAVA_CLIENT_ID = os.environ.get("STRAVA_CLIENT_ID")
@@ -52,8 +51,6 @@ logger.info(f"✅ VIP List Loaded: {AUTHORIZED_USERS}")
 # 3. AI CLIENT & DATA MAPS
 # ==========================================
 llm_client = AsyncInferenceClient(model="Qwen/Qwen2.5-Coder-32B-Instruct", token=HF_TOKEN)
-
-GROCERY_FILE = "groceries.txt"
 
 PORTFOLIO_MAP = {
     "EUNL.DE": "MSCI World (EUNL)",
@@ -407,14 +404,27 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         display_name = "Lausanne, Switzerland"
         lat, lon = 46.5197, 6.6323
 
-    weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
+    # 1. Use the modern API format
+    weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code"
+    
+    # 2. Add a Custom User-Agent so Open-Meteo knows we aren't a spam bot
+    headers = {"User-Agent": "MattouBot/1.0 (Telegram Assistant)"}
     
     try:
-        res = await asyncio.to_thread(requests.get, weather_url, timeout=10)
+        # 3. Pass the headers into the request
+        res = await asyncio.to_thread(requests.get, weather_url, headers=headers, timeout=10)
         data = res.json()
-        current = data['current_weather']
-        temp = current['temperature']
-        code = current['weathercode']
+        
+        # 4. Check if the API threw an error explicitly
+        if "error" in data:
+            logger.error(f"❌ Open-Meteo API Error: {data}")
+            await status_msg.edit_text("⚠️ <i>The weather radar is blocking my connection!</i>", parse_mode=ParseMode.HTML)
+            return
+            
+        # 5. Parse the new modern JSON structure
+        current = data['current']
+        temp = current['temperature_2m']
+        code = current['weather_code'] # Notice the underscore here!
         
         condition = WMO_WEATHER_CODES.get(code, "mixed weather")
         
@@ -820,12 +830,16 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     temp = "Unknown"
     
     try:
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true"
-        res = await asyncio.to_thread(requests.get, url, timeout=10)
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code"
+        headers = {"User-Agent": "MattouBot/1.0 (Telegram Assistant)"}
+        
+        res = await asyncio.to_thread(requests.get, url, headers=headers, timeout=10)
         data = res.json()
-        temp = data['current_weather']['temperature']
-        code = data['current_weather']['weathercode']
-        weather_condition = WMO_WEATHER_CODES.get(code, "mixed weather").lower()
+        
+        if "error" not in data:
+            temp = data['current']['temperature_2m']
+            code = data['current']['weather_code']
+            weather_condition = WMO_WEATHER_CODES.get(code, "mixed weather").lower()
     except Exception as e:
         logger.error(f"Weather fetch failed for dateidea: {e}")
 
