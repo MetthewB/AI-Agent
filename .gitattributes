@@ -1,2 +1,16 @@
 # Auto detect text files and perform LF normalization
 * text=auto
+
+# Explicitly force LF for code files (Crucial for Render/Linux)
+*.py text eol=lf
+*.sh text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+Dockerfile text eol=lf
+
+# Tell Git NOT to mess with audio or media files
+*.ogg binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
