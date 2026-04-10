@@ -4,6 +4,7 @@ import time
 import json
 import random
 import certifi
+import difflib
 import asyncio
 import logging
 import datetime
@@ -541,14 +542,22 @@ async def grocery_remove_command(update: Update, context: ContextTypes.DEFAULT_T
         return
         
     try:
-        import re
-        escaped_item = re.escape(item_to_remove)
-        result = grocery_collection.delete_one({"item": {"$regex": f"^{escaped_item}$", "$options": "i"}})
+        items_cursor = grocery_collection.find()
+        current_items = [doc["item"] for doc in items_cursor]
         
-        if result.deleted_count > 0:
-            await update.message.reply_text(f"✅ Removed <b>{item_to_remove}</b> from the list!", parse_mode=ParseMode.HTML)
+        if not current_items:
+            await update.message.reply_text("🛒 <b>The list is already empty!</b>", parse_mode=ParseMode.HTML)
+            return
+        
+        matches = difflib.get_close_matches(item_to_remove, current_items, n=1, cutoff=0.3)
+        
+        if matches:
+            best_match = matches[0]
+            grocery_collection.delete_one({"item": best_match})
+            await update.message.reply_text(f"✅ Removed <b>{best_match}</b> from the list!", parse_mode=ParseMode.HTML)
         else:
-            await update.message.reply_text(f"⚠️ I couldn't find <b>{item_to_remove}</b> in the list. Did you misspell it?", parse_mode=ParseMode.HTML)
+            await update.message.reply_text(f"⚠️ I couldn't find anything resembling <b>{item_to_remove}</b> in the list.", parse_mode=ParseMode.HTML)
+            
     except Exception as e:
         logger.error(f"❌ Grocery Remove Error: {e}")
         await update.message.reply_text("⚠️ <i>Failed to remove the item from the database!</i>", parse_mode=ParseMode.HTML)
