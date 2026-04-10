@@ -95,7 +95,7 @@ async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
         
         response = await asyncio.wait_for(
             llm_client.chat_completion(messages=messages, max_tokens=max_tokens, temperature=0.7), 
-            timeout=15.0
+            timeout=30.0
         )
         logger.info("✅ LLM response generated successfully.")
         return response.choices[0].message.content
@@ -899,28 +899,40 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         # 3. Route intent using Qwen
         prompt = f"""
-        You are an intelligent API router. Read this transcribed voice message: "{transcription}"
+        You are a strict, highly logical API router. 
+        Read this transcribed voice message (it may be in French or English): "{transcription}"
         
-        Map the user's intent to one OR MORE of these available commands:
-        - train (requires args: sport and specifications)
-        - weather (requires args: city name)
-        - news (no args)
-        - portfolio (no args)
-        - recipe (requires args: ingredients)
-        - grocery (requires args: item to add)
-        - stats (no args)
-        - cat (no args)
-        - dateidea (requires args: city name)
+        Map the user's intent to one OR MORE of the available commands below.
+        
+        CRITICAL RULES FOR ARGS:
+        1. Extract ONLY the exact parameters needed. Do NOT include filler words or full sentences.
+        2. If the user speaks French, translate the intent, but keep city names or specific items intact.
+        
+        AVAILABLE COMMANDS & ARGUMENT RULES:
+        - train: args = ["sport", "details"] (e.g., ["running", "10km easy"])
+        - weather: args = ["city"] (e.g., ["Paris"] - ONLY the city name!)
+        - news: args = [] (No args)
+        - portfolio: args = [] (No args)
+        - recipe: args = ["ingredient1", "ingredient2"] 
+        - grocery: 
+            - If they ask to READ, CHECK, or SEE the list: args = [] (Must be empty!)
+            - If they ask to ADD an item to the list: args = ["item name"]
+        - stats: args = [] (No args)
+        - cat: args = [] (No args)
+        - dateidea: args = ["city"] (e.g., ["Geneva"])
         
         Return ONLY a valid JSON list of dictionaries. No markdown formatting, no explanation, no extra text.
         
-        Example format:
+        EXAMPLE 1 - "Quel est le temps à Lausanne et donne moi les infos":
         [
-          {{"command": "train", "args": ["running", "10km"]}},
-          {{"command": "weather", "args": ["Paris"]}}
+          {{"command": "weather", "args": ["Lausanne"]}},
+          {{"command": "news", "args": []}}
         ]
         
-        If it is just casual chatter and matches no commands, return an empty list: []
+        EXAMPLE 2 - "Qu'est ce qu'on a dans la liste de courses ?":
+        [
+          {{"command": "grocery", "args": []}}
+        ]
         """
         
         routing_response = await ask_llm(prompt, max_tokens=200)
