@@ -875,7 +875,7 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         audio_bytes = await voice_file.download_as_bytearray()
 
         # 2. Transcribe using Hugging Face's Free Whisper Model
-        API_URL = "https://api-inference.huggingface.co/models/openai/whisper-large-v3-turbo"
+        API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
         headers = {"Authorization": f"Bearer {HF_TOKEN}"}
         
         # We send the raw bytes directly to the API
