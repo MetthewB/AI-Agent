@@ -5,11 +5,8 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from telegram.ext import Application, CommandHandler, MessageHandler, filters
 from modules.database import init_db
-
-# Import your Configuration & VIP Token
 from modules.config import TOKEN
 
-# Import ALL your commands from the commands module
 from modules.commands import (
     start_command, help_command, portfolio_command, news_command,
     research_command, weather_command, remind_command,
@@ -18,7 +15,6 @@ from modules.commands import (
     dateidea_command, cat_command, error_handler
 )
 
-# Import the magical voice router
 from modules.voice_router import voice_handler
 
 # ==========================================

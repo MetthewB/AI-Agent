@@ -2,7 +2,10 @@ import re
 import asyncio
 import logging
 import requests
+import datetime
 
+# Import Database tools
+from modules.database import SessionLocal, Activity
 # Import credentials from your config module
 from modules.config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_REFRESH_TOKEN
 
@@ -34,10 +37,63 @@ async def get_strava_access_token() -> str:
         return None
 
 # ==========================================
-# 2. DATA FETCHING
+# 2. DATABASE SYNC (PostgreSQL)
+# ==========================================
+async def sync_activities_to_db(activities_data):
+    """
+    Takes a list of activity dictionaries from Strava API 
+    and persists new ones into PostgreSQL.
+    """
+    db = SessionLocal()
+    new_count = 0
+    
+    try:
+        for act in activities_data:
+            strava_id = act.get('id')
+            
+            # Check if this activity already exists in our Long-Term Memory
+            exists = db.query(Activity).filter(Activity.strava_id == strava_id).first()
+            
+            if not exists:
+                # Convert Strava date string to Python datetime object
+                date_str = act.get('start_date_local', '')[:10]
+                date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d") if date_str else datetime.datetime.utcnow()
+                
+                # Extract Coros Load from description
+                desc = act.get('description', '') or ''
+                coros_load = None
+                if "charge d'entraînement" in desc.lower():
+                    match = re.search(r'(\d+)\s*charge', desc.lower())
+                    if match:
+                        coros_load = int(match.group(1))
+
+                new_act = Activity(
+                    strava_id=strava_id,
+                    date=date_obj,
+                    sport=act.get('sport_type') or act.get('type'),
+                    distance=act.get('distance', 0) / 1000, # convert to km
+                    duration=act.get('moving_time', 0) // 60, # convert to minutes
+                    avg_hr=act.get('average_heartrate'),
+                    coros_load=coros_load
+                )
+                db.add(new_act)
+                new_count += 1
+        
+        db.commit()
+        if new_count > 0:
+            logger.info(f"📊 Database Sync: Added {new_count} new activities to PostgreSQL.")
+    except Exception as e:
+        logger.error(f"❌ Database Sync Error: {e}")
+        db.rollback()
+    finally:
+        db.close()
+    return new_count
+
+# ==========================================
+# 3. DATA FETCHING & FORMATTING
 # ==========================================
 async def get_recent_strava_activities(limit: int = 5) -> str:
-    """Fetches latest activities and extracts all data including duration and Coros Load."""
+    """Fetches latest activities, syncs them to DB, and returns a formatted string."""
     access_token = await get_strava_access_token()
     if not access_token: 
         return "No Strava data available."
@@ -48,8 +104,12 @@ async def get_recent_strava_activities(limit: int = 5) -> str:
     try:
         res = await asyncio.to_thread(requests.get, url, headers=headers, timeout=10)
         activities = res.json()
-        if not activities: 
+        
+        if not activities or not isinstance(activities, list): 
             return "No recent history."
+
+        # Trigger background sync to PostgreSQL
+        await sync_activities_to_db(activities)
         
         history = []
         for act in activities:
@@ -64,8 +124,8 @@ async def get_recent_strava_activities(limit: int = 5) -> str:
             
             # Extract Coros Load if it exists in the description
             coros_load = "Unknown"
-            if "charge d'entraînement" in desc:
-                match = re.search(r'(\d+)\s*charge', desc)
+            if desc and "charge d'entraînement" in desc.lower():
+                match = re.search(r'(\d+)\s*charge', desc.lower())
                 if match:
                     coros_load = match.group(1)
 
