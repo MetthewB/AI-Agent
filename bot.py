@@ -248,6 +248,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "<b>🛒 Shared Life</b>\n"
         "• /grocery [item] - Add an item to the list\n"
         "• /grocery - View the current list\n"
+        "• /grocery_remove - Remove an item from the list\n"
         "• /grocery_empty - Clear the list\n"
         "• /decide [A], [B] - Settle an argument\n"
         "• /recipe [ingredients] - Empty fridge chef\n\n"
@@ -529,6 +530,28 @@ async def grocery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"❌ Grocery Add Error: {e}")
         await update.message.reply_text("⚠️ <i>Failed to add the item. The cart is stuck!</i>", parse_mode=ParseMode.HTML)
+
+async def grocery_remove_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /grocery_remove")
+    item_to_remove = " ".join(context.args).strip()
+    
+    if not item_to_remove:
+        await update.message.reply_text("⚠️ <b>Usage:</b> /grocery_remove [item name]\n<i>Example: /grocery_remove eggs</i>", parse_mode=ParseMode.HTML)
+        return
+        
+    try:
+        import re
+        escaped_item = re.escape(item_to_remove)
+        result = grocery_collection.delete_one({"item": {"$regex": f"^{escaped_item}$", "$options": "i"}})
+        
+        if result.deleted_count > 0:
+            await update.message.reply_text(f"✅ Removed <b>{item_to_remove}</b> from the list!", parse_mode=ParseMode.HTML)
+        else:
+            await update.message.reply_text(f"⚠️ I couldn't find <b>{item_to_remove}</b> in the list. Did you misspell it?", parse_mode=ParseMode.HTML)
+    except Exception as e:
+        logger.error(f"❌ Grocery Remove Error: {e}")
+        await update.message.reply_text("⚠️ <i>Failed to remove the item from the database!</i>", parse_mode=ParseMode.HTML)
 
 async def grocery_empty_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
@@ -928,13 +951,17 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         - news: args = [] (No args)
         - portfolio: args = [] (No args)
         - recipe: args = ["ingredient1", "ingredient2"] 
-        - grocery: 
-            - If they ask to READ, CHECK, or SEE the list: args = [] (Must be empty!)
-            - If they ask to ADD an item to the list: args = ["item name"]
         - stats: args = [] (No args)
         - cat: args = [] (No args)
         - dateidea: args = ["city"] (e.g., ["Geneva"])
         
+        GROCERY COMMAND RULES (PAY CLOSE ATTENTION):
+        - grocery: 
+            - If they ask to READ, CHECK, or SEE the list: args = [] (Must be empty!)
+            - If they ask to ADD an item to the list: args = ["item name"]
+        - grocery_remove: 
+            - If they ask to REMOVE, DELETE, or TAKE OFF an item: args = ["item name"]
+            
         Return ONLY a valid JSON list of dictionaries. No markdown formatting, no explanation, no extra text.
         
         EXAMPLE 1 - "Quel est le temps à Lausanne et donne moi les infos":
@@ -943,9 +970,9 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
           {{"command": "news", "args": []}}
         ]
         
-        EXAMPLE 2 - "Qu'est ce qu'on a dans la liste de courses ?":
+        EXAMPLE 2 - "Enlève les œufs de la liste de courses":
         [
-          {{"command": "grocery", "args": []}}
+          {{"command": "grocery_remove", "args": ["œufs"]}}
         ]
         """
         
@@ -975,6 +1002,7 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "portfolio": portfolio_command,
             "recipe": recipe_command,
             "grocery": grocery_command,
+            "grocery_remove": grocery_remove_command,
             "stats": stats_command,
             "cat": cat_command,
             "dateidea": dateidea_command
@@ -1028,6 +1056,7 @@ if __name__ == "__main__":
                 
                 # --- Shared Life ---
                 app.add_handler(CommandHandler("grocery", grocery_command))
+                app.add_handler(CommandHandler("grocery_remove", grocery_remove_command))
                 app.add_handler(CommandHandler("grocery_empty", grocery_empty_command))
                 app.add_handler(CommandHandler("decide", decide_command))
                 app.add_handler(CommandHandler("recipe", recipe_command))
