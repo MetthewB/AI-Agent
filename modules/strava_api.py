@@ -40,53 +40,93 @@ async def get_strava_access_token() -> str:
 # 2. DATABASE SYNC (PostgreSQL)
 # ==========================================
 async def sync_activities_to_db(activities_data):
-    """
-    Takes a list of activity dictionaries from Strava API 
-    and persists new ones into PostgreSQL.
-    """
+    print("--- DEBUG 0: Entered sync_activities_to_db ---")
+    print(f"DEBUG 0.5: activities_data is type: {type(activities_data)}")
+    
+    # 1. Catch API Error Responses (e.g. if Strava sent a dictionary with an error message instead of a list)
+    if not isinstance(activities_data, list):
+        print(f"DEBUG ERROR: Expected a list of activities, but got {type(activities_data)}: {activities_data}")
+        return 0
+
     db = SessionLocal()
     new_count = 0
     
     try:
-        for act in activities_data:
-            strava_id = act.get('id')
+        print(f"DEBUG 1: Processing {len(activities_data)} activities from Strava")
+        for index, act in enumerate(activities_data):
+            print(f"\n--- DEBUG 2: Inspecting Activity [{index}] ---")
             
-            # Check if this activity already exists in our Long-Term Memory
+            # Extract ID safely
+            strava_id = act.get('id')
+            print(f"DEBUG 3: strava_id = {strava_id} (Type: {type(strava_id)})")
+            
+            if not strava_id:
+                print("DEBUG 4: Skipping - No strava_id found in this activity.")
+                continue
+                
+            # 2. Check if it exists
+            print("DEBUG 5: Querying database for existence...")
             exists = db.query(Activity).filter(Activity.strava_id == strava_id).first()
             
-            if not exists:
-                # Convert Strava date string to Python datetime object
-                date_str = act.get('start_date_local', '')[:10]
-                date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d") if date_str else datetime.datetime.utcnow()
+            if exists:
+                print(f"DEBUG 6: Activity {strava_id} ALREADY EXISTS. Skipping.")
+            else:
+                print(f"DEBUG 6: Activity {strava_id} is NEW. Attempting to parse data...")
                 
-                # Extract Coros Load from description
-                desc = act.get('description', '') or ''
-                coros_load = None
-                if "charge d'entraînement" in desc.lower():
-                    match = re.search(r'(\d+)\s*charge', desc.lower())
-                    if match:
-                        coros_load = int(match.group(1))
+                # 3. Inner Try/Except: If one activity has bad data, don't crash the whole sync!
+                try:
+                    # Safely handle dates
+                    raw_date = act.get('start_date_local', '')
+                    date_str = str(raw_date)[:10] if raw_date else ""
+                    print(f"DEBUG 7a: Parsing date string: '{date_str}'")
+                    
+                    try:
+                        date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d")
+                    except Exception as date_err:
+                        print(f"DEBUG 7b: Date parsing failed ({date_err}), falling back to utcnow.")
+                        date_obj = datetime.datetime.utcnow()
 
-                new_act = Activity(
-                    strava_id=strava_id,
-                    date=date_obj,
-                    sport=act.get('sport_type') or act.get('type'),
-                    distance=act.get('distance', 0) / 1000, # convert to km
-                    duration=act.get('moving_time', 0) // 60, # convert to minutes
-                    avg_hr=act.get('average_heartrate'),
-                    coros_load=coros_load
-                )
-                db.add(new_act)
-                new_count += 1
+                    # Safely handle numbers
+                    sport = act.get('sport_type') or act.get('type', 'Unknown')
+                    distance = float(act.get('distance', 0)) / 1000
+                    duration = int(act.get('moving_time', 0)) // 60
+                    avg_hr = act.get('average_heartrate')
+                    
+                    print(f"DEBUG 8: Parsed stats -> Sport: {sport}, Dist: {distance}, Dur: {duration}, HR: {avg_hr}")
+
+                    new_act = Activity(
+                        strava_id=strava_id,
+                        date=date_obj,
+                        sport=sport,
+                        distance=distance,
+                        duration=duration,
+                        avg_hr=avg_hr,
+                        coros_load=None # Skipping Coros regex temporarily to isolate bugs
+                    )
+                    
+                    print("DEBUG 9: Adding to DB session...")
+                    db.add(new_act)
+                    new_count += 1
+                    
+                except Exception as inner_e:
+                    print(f"DEBUG ERROR INNER: Failed to process activity {strava_id}. Reason: {inner_e}")
+                    # Notice we do NOT raise here, so it continues to the next activity
         
+        print(f"\n--- DEBUG 10: Loop finished. Attempting to commit {new_count} new items... ---")
         db.commit()
+        print("DEBUG 11: Commit successful!")
+        
         if new_count > 0:
-            logger.info(f"📊 Database Sync: Added {new_count} new activities to PostgreSQL.")
+            logger.info(f"📊 PostgreSQL Sync: Saved {new_count} new activities.")
+            
     except Exception as e:
-        logger.error(f"❌ Database Sync Error: {e}")
+        print(f"DEBUG ERROR OUTER: CRITICAL DATABASE CRASH: {e}")
+        logger.error(f"❌ PostgreSQL Sync Error: {e}")
         db.rollback()
     finally:
         db.close()
+        print("DEBUG 12: Database session closed.\n")
+        
     return new_count
 
 # ==========================================
