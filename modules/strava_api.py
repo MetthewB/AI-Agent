@@ -40,50 +40,50 @@ async def get_strava_access_token() -> str:
 # 2. DATABASE SYNC (PostgreSQL)
 # ==========================================
 async def sync_activities_to_db(activities_data):
-    print("--- DEBUG 0: Entered sync_activities_to_db ---")
-    print(f"DEBUG 0.5: activities_data is type: {type(activities_data)}")
+    logger.info("--- DEBUG 0: Entered sync_activities_to_db ---")
+    logger.info(f"DEBUG 0.5: activities_data is type: {type(activities_data)}")
     
-    # 1. Catch API Error Responses (e.g. if Strava sent a dictionary with an error message instead of a list)
+    # 1. Catch API Error Responses
     if not isinstance(activities_data, list):
-        print(f"DEBUG ERROR: Expected a list of activities, but got {type(activities_data)}: {activities_data}")
+        logger.error(f"DEBUG ERROR: Expected a list of activities, but got {type(activities_data)}: {activities_data}")
         return 0
 
     db = SessionLocal()
     new_count = 0
     
     try:
-        print(f"DEBUG 1: Processing {len(activities_data)} activities from Strava")
+        logger.info(f"DEBUG 1: Processing {len(activities_data)} activities from Strava")
         for index, act in enumerate(activities_data):
-            print(f"\n--- DEBUG 2: Inspecting Activity [{index}] ---")
+            logger.info(f"\n--- DEBUG 2: Inspecting Activity [{index}] ---")
             
             # Extract ID safely
             strava_id = act.get('id')
-            print(f"DEBUG 3: strava_id = {strava_id} (Type: {type(strava_id)})")
+            logger.info(f"DEBUG 3: strava_id = {strava_id} (Type: {type(strava_id)})")
             
             if not strava_id:
-                print("DEBUG 4: Skipping - No strava_id found in this activity.")
+                logger.warning("DEBUG 4: Skipping - No strava_id found in this activity.")
                 continue
                 
             # 2. Check if it exists
-            print("DEBUG 5: Querying database for existence...")
+            logger.info("DEBUG 5: Querying database for existence...")
             exists = db.query(Activity).filter(Activity.strava_id == strava_id).first()
             
             if exists:
-                print(f"DEBUG 6: Activity {strava_id} ALREADY EXISTS. Skipping.")
+                logger.info(f"DEBUG 6: Activity {strava_id} ALREADY EXISTS. Skipping.")
             else:
-                print(f"DEBUG 6: Activity {strava_id} is NEW. Attempting to parse data...")
+                logger.info(f"DEBUG 6: Activity {strava_id} is NEW. Attempting to parse data...")
                 
-                # 3. Inner Try/Except: If one activity has bad data, don't crash the whole sync!
+                # 3. Inner Try/Except
                 try:
                     # Safely handle dates
                     raw_date = act.get('start_date_local', '')
                     date_str = str(raw_date)[:10] if raw_date else ""
-                    print(f"DEBUG 7a: Parsing date string: '{date_str}'")
+                    logger.info(f"DEBUG 7a: Parsing date string: '{date_str}'")
                     
                     try:
                         date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d")
                     except Exception as date_err:
-                        print(f"DEBUG 7b: Date parsing failed ({date_err}), falling back to utcnow.")
+                        logger.warning(f"DEBUG 7b: Date parsing failed ({date_err}), falling back to utcnow.")
                         date_obj = datetime.datetime.utcnow()
 
                     # Safely handle numbers
@@ -92,7 +92,7 @@ async def sync_activities_to_db(activities_data):
                     duration = int(act.get('moving_time', 0)) // 60
                     avg_hr = act.get('average_heartrate')
                     
-                    print(f"DEBUG 8: Parsed stats -> Sport: {sport}, Dist: {distance}, Dur: {duration}, HR: {avg_hr}")
+                    logger.info(f"DEBUG 8: Parsed stats -> Sport: {sport}, Dist: {distance}, Dur: {duration}, HR: {avg_hr}")
 
                     new_act = Activity(
                         strava_id=strava_id,
@@ -101,31 +101,30 @@ async def sync_activities_to_db(activities_data):
                         distance=distance,
                         duration=duration,
                         avg_hr=avg_hr,
-                        coros_load=None # Skipping Coros regex temporarily to isolate bugs
+                        coros_load=None 
                     )
                     
-                    print("DEBUG 9: Adding to DB session...")
+                    logger.info("DEBUG 9: Adding to DB session...")
                     db.add(new_act)
                     new_count += 1
                     
                 except Exception as inner_e:
-                    print(f"DEBUG ERROR INNER: Failed to process activity {strava_id}. Reason: {inner_e}")
-                    # Notice we do NOT raise here, so it continues to the next activity
+                    logger.error(f"DEBUG ERROR INNER: Failed to process activity {strava_id}. Reason: {inner_e}")
         
-        print(f"\n--- DEBUG 10: Loop finished. Attempting to commit {new_count} new items... ---")
+        logger.info(f"\n--- DEBUG 10: Loop finished. Attempting to commit {new_count} new items... ---")
         db.commit()
-        print("DEBUG 11: Commit successful!")
+        logger.info("DEBUG 11: Commit successful!")
         
         if new_count > 0:
             logger.info(f"📊 PostgreSQL Sync: Saved {new_count} new activities.")
             
     except Exception as e:
-        print(f"DEBUG ERROR OUTER: CRITICAL DATABASE CRASH: {e}")
+        logger.error(f"DEBUG ERROR OUTER: CRITICAL DATABASE CRASH: {e}")
         logger.error(f"❌ PostgreSQL Sync Error: {e}")
         db.rollback()
     finally:
         db.close()
-        print("DEBUG 12: Database session closed.\n")
+        logger.info("DEBUG 12: Database session closed.\n")
         
     return new_count
 
@@ -148,7 +147,8 @@ async def get_recent_strava_activities(limit: int = 5) -> str:
         if not activities or not isinstance(activities, list): 
             return "No recent history."
 
-        # Trigger background sync to PostgreSQL
+        # Trigger background sync to PostgreSQL (with explicit log check)
+        logger.info(f"🚀 Triggering background PostgreSQL sync for {len(activities)} activities...")
         await sync_activities_to_db(activities)
         
         history = []
