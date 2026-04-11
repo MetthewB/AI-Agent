@@ -13,7 +13,7 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
 # Import everything we need from our other modules!
-from modules.config import AUTHORIZED_USERS, PORTFOLIO_MAP, WMO_WEATHER_CODES, grocery_collection
+from modules.config import AUTHORIZED_USERS, PORTFOLIO_MAP, grocery_collection
 from modules.ai_core import ask_llm
 from modules.strava_api import get_strava_access_token, get_recent_strava_activities
 
@@ -231,47 +231,27 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     logger.info(f"▶️ User {update.effective_chat.id} triggered /weather")
     
-    city_query = " ".join(context.args)
-    headers = {"User-Agent": "MattouBot/1.0 (Telegram Assistant)"}
+    # Default to Lausanne if no city is provided
+    city_query = " ".join(context.args) or "Lausanne"
+    display_name = city_query.title()
     
-    if city_query:
-        status_msg = await update.message.reply_text(f"<i>Looking for {city_query} on the map...</i> 🌍", parse_mode=ParseMode.HTML)
-        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={city_query}&count=1&language=en&format=json"
-        try:
-            geo_res = await asyncio.to_thread(requests.get, geo_url, headers=headers, timeout=10)
-            geo_data = geo_res.json()
-            if "results" not in geo_data:
-                await status_msg.edit_text(f"⚠️ <i>I couldn't find a city named '<b>{city_query}</b>'. Did you make a typo?</i>", parse_mode=ParseMode.HTML)
-                return
-            city_name = geo_data['results'][0]['name']
-            country = geo_data['results'][0].get('country', '')
-            display_name = f"{city_name}, {country}" if country else city_name
-            lat = geo_data['results'][0]['latitude']
-            lon = geo_data['results'][0]['longitude']
-        except Exception as e:
-            logger.error(f"❌ Geocoding Error: {e}")
-            await status_msg.edit_text("⚠️ <i>My map is broken right now. Try again later!</i> 🗺️", parse_mode=ParseMode.HTML)
-            return
-    else:
-        status_msg = await update.message.reply_text("<i>Looking out the window in Lausanne...</i> 🏔️", parse_mode=ParseMode.HTML)
-        display_name = "Lausanne, Switzerland"
-        lat, lon = 46.5197, 6.6323
-
-    weather_url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code"
+    status_msg = await update.message.reply_text(f"<i>Looking up the weather for {display_name}...</i> 🌍", parse_mode=ParseMode.HTML)
+    
+    # wttr.in handles both location search and weather in one single URL
+    weather_url = f"https://wttr.in/{city_query}?format=j1"
+    headers = {"User-Agent": "MattouBot/1.0 (Telegram Assistant)"}
     
     try:
         res = await asyncio.to_thread(requests.get, weather_url, headers=headers, timeout=10)
-        data = res.json()
         
-        if "error" in data:
-            logger.error(f"❌ Open-Meteo API Error: {data}")
-            await status_msg.edit_text("⚠️ <i>The weather radar is blocking my connection!</i>", parse_mode=ParseMode.HTML)
+        if res.status_code != 200:
+            await status_msg.edit_text(f"⚠️ <i>I couldn't find weather data for '<b>{display_name}</b>'. Did you make a typo?</i>", parse_mode=ParseMode.HTML)
             return
             
-        current = data['current']
-        temp = current['temperature_2m']
-        code = current['weather_code']
-        condition = WMO_WEATHER_CODES.get(code, "mixed weather")
+        data = res.json()
+        current = data['current_condition'][0]
+        temp = current['temp_C']
+        condition = current['weatherDesc'][0]['value'] # wttr.in gives us the text description directly!
         
         prompt = f"""
         CONTEXT:
@@ -684,46 +664,24 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     logger.info(f"▶️ User {update.effective_chat.id} triggered /dateidea")
     
-    location_query = " ".join(context.args)
+    location_query = " ".join(context.args) or "the Vaud/Valais region of Switzerland"
+    display_location = location_query.title()
     status_msg = await update.message.reply_text("<i>Checking the weather and thinking of something romantic...</i> 🍷", parse_mode=ParseMode.HTML)
     current_date = datetime.datetime.now().strftime("%A, %B %d, %Y")
     
-    if location_query:
-        headers = {"User-Agent": "MattouBot/1.0 (Telegram Assistant)"}
-        geo_url = f"https://geocoding-api.open-meteo.com/v1/search?name={location_query}&count=1&language=en&format=json"
-        try:
-            geo_res = await asyncio.to_thread(requests.get, geo_url, headers=headers, timeout=10)
-            geo_data = geo_res.json()
-            if "results" not in geo_data:
-                await status_msg.edit_text(f"⚠️ <i>I couldn't find a place named '<b>{location_query}</b>'. Did you make a typo?</i>", parse_mode=ParseMode.HTML)
-                return
-            city_name = geo_data['results'][0]['name']
-            country = geo_data['results'][0].get('country', '')
-            display_location = f"{city_name}, {country}" if country else city_name
-            lat = geo_data['results'][0]['latitude']
-            lon = geo_data['results'][0]['longitude']
-        except Exception as e:
-            logger.error(f"❌ Geocoding Error for dateidea: {e}")
-            await status_msg.edit_text("⚠️ <i>My map is broken right now. Try again later!</i> 🗺️", parse_mode=ParseMode.HTML)
-            return
-    else:
-        display_location = "the Vaud/Valais region of Switzerland"
-        lat, lon = 46.5197, 6.6323 
-
     weather_condition = "Unknown"
     temp = "Unknown"
     
     try:
-        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current=temperature_2m,weather_code"
+        # Fetch weather directly based on the query string
+        url = f"https://wttr.in/{location_query}?format=j1"
         headers = {"User-Agent": "MattouBot/1.0 (Telegram Assistant)"}
         
         res = await asyncio.to_thread(requests.get, url, headers=headers, timeout=10)
-        data = res.json()
-        
-        if "error" not in data:
-            temp = data['current']['temperature_2m']
-            code = data['current']['weather_code']
-            weather_condition = WMO_WEATHER_CODES.get(code, "mixed weather").lower()
+        if res.status_code == 200:
+            data = res.json()
+            temp = data['current_condition'][0]['temp_C']
+            weather_condition = data['current_condition'][0]['weatherDesc'][0]['value'].lower()
     except Exception as e:
         logger.error(f"Weather fetch failed for dateidea: {e}")
 
