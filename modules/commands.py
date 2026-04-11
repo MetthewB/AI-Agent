@@ -586,6 +586,10 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not activities:
             await status_msg.edit_text("📊 <b>Weekly Stats</b>\n\nYou haven't logged any activities in the last 7 days. Time to get moving! 🏃‍♂️💨", parse_mode=ParseMode.HTML)
             return
+        
+        logger.info(f"🚀 Triggering background PostgreSQL sync for {len(activities)} weekly activities...")
+        from modules.strava_api import sync_activities_to_db
+        await sync_activities_to_db(activities)
             
         total_time = 0
         total_load = 0

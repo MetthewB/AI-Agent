@@ -29,7 +29,6 @@ async def get_strava_access_token() -> str:
         "refresh_token": STRAVA_REFRESH_TOKEN
     }
     try:
-        # We use asyncio.to_thread so the blocking requests.post doesn't freeze the bot
         res = await asyncio.to_thread(requests.post, url, data=payload, timeout=10)
         return res.json().get("access_token")
     except Exception as e:
@@ -40,50 +39,35 @@ async def get_strava_access_token() -> str:
 # 2. DATABASE SYNC (PostgreSQL)
 # ==========================================
 async def sync_activities_to_db(activities_data):
-    logger.info("--- DEBUG 0: Entered sync_activities_to_db ---")
-    logger.info(f"DEBUG 0.5: activities_data is type: {type(activities_data)}")
-    
-    # 1. Catch API Error Responses
+    """
+    Takes a list of activity dictionaries from Strava API 
+    and persists new ones into PostgreSQL.
+    """
     if not isinstance(activities_data, list):
-        logger.error(f"DEBUG ERROR: Expected a list of activities, but got {type(activities_data)}: {activities_data}")
+        logger.error(f"❌ Sync Error: Expected a list of activities, got {type(activities_data)}")
         return 0
 
     db = SessionLocal()
     new_count = 0
     
     try:
-        logger.info(f"DEBUG 1: Processing {len(activities_data)} activities from Strava")
-        for index, act in enumerate(activities_data):
-            logger.info(f"\n--- DEBUG 2: Inspecting Activity [{index}] ---")
-            
-            # Extract ID safely
+        for act in activities_data:
             strava_id = act.get('id')
-            logger.info(f"DEBUG 3: strava_id = {strava_id} (Type: {type(strava_id)})")
-            
             if not strava_id:
-                logger.warning("DEBUG 4: Skipping - No strava_id found in this activity.")
                 continue
                 
-            # 2. Check if it exists
-            logger.info("DEBUG 5: Querying database for existence...")
+            # Check if it exists in the database
             exists = db.query(Activity).filter(Activity.strava_id == strava_id).first()
             
-            if exists:
-                logger.info(f"DEBUG 6: Activity {strava_id} ALREADY EXISTS. Skipping.")
-            else:
-                logger.info(f"DEBUG 6: Activity {strava_id} is NEW. Attempting to parse data...")
-                
-                # 3. Inner Try/Except
+            if not exists:
                 try:
                     # Safely handle dates
                     raw_date = act.get('start_date_local', '')
                     date_str = str(raw_date)[:10] if raw_date else ""
-                    logger.info(f"DEBUG 7a: Parsing date string: '{date_str}'")
                     
                     try:
                         date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d")
-                    except Exception as date_err:
-                        logger.warning(f"DEBUG 7b: Date parsing failed ({date_err}), falling back to utcnow.")
+                    except Exception:
                         date_obj = datetime.datetime.utcnow()
 
                     # Safely handle numbers
@@ -91,8 +75,6 @@ async def sync_activities_to_db(activities_data):
                     distance = float(act.get('distance', 0)) / 1000
                     duration = int(act.get('moving_time', 0)) // 60
                     avg_hr = act.get('average_heartrate')
-                    
-                    logger.info(f"DEBUG 8: Parsed stats -> Sport: {sport}, Dist: {distance}, Dur: {duration}, HR: {avg_hr}")
 
                     new_act = Activity(
                         strava_id=strava_id,
@@ -101,30 +83,25 @@ async def sync_activities_to_db(activities_data):
                         distance=distance,
                         duration=duration,
                         avg_hr=avg_hr,
-                        coros_load=None 
+                        coros_load=None # We can integrate Coros regex here later if needed
                     )
                     
-                    logger.info("DEBUG 9: Adding to DB session...")
                     db.add(new_act)
                     new_count += 1
                     
                 except Exception as inner_e:
-                    logger.error(f"DEBUG ERROR INNER: Failed to process activity {strava_id}. Reason: {inner_e}")
+                    logger.error(f"❌ Failed to process activity {strava_id}. Reason: {inner_e}")
         
-        logger.info(f"\n--- DEBUG 10: Loop finished. Attempting to commit {new_count} new items... ---")
         db.commit()
-        logger.info("DEBUG 11: Commit successful!")
         
         if new_count > 0:
             logger.info(f"📊 PostgreSQL Sync: Saved {new_count} new activities.")
             
     except Exception as e:
-        logger.error(f"DEBUG ERROR OUTER: CRITICAL DATABASE CRASH: {e}")
         logger.error(f"❌ PostgreSQL Sync Error: {e}")
         db.rollback()
     finally:
         db.close()
-        logger.info("DEBUG 12: Database session closed.\n")
         
     return new_count
 
@@ -147,8 +124,7 @@ async def get_recent_strava_activities(limit: int = 5) -> str:
         if not activities or not isinstance(activities, list): 
             return "No recent history."
 
-        # Trigger background sync to PostgreSQL (with explicit log check)
-        logger.info(f"🚀 Triggering background PostgreSQL sync for {len(activities)} activities...")
+        # Trigger background sync to PostgreSQL
         await sync_activities_to_db(activities)
         
         history = []
