@@ -34,6 +34,50 @@ def run_health_check():
     server.serve_forever()
 
 # ==========================================
+# BOT INSTANCE (Clean Scope)
+# ==========================================
+def run_bot():
+    """Builds and runs the bot in an isolated scope to prevent Event Loop crashes."""
+    logger.info("🤖 Starting Modular MattouBot...")
+    app = Application.builder().token(TOKEN).build()
+    
+    # --- General & Help ---
+    app.add_handler(CommandHandler("start", start_command))
+    app.add_handler(CommandHandler("help", help_command))
+    
+    # --- Finance & News ---
+    app.add_handler(CommandHandler("portfolio", portfolio_command))
+    app.add_handler(CommandHandler("news", news_command))
+    
+    # --- Knowledge & Utility ---
+    app.add_handler(CommandHandler("research", research_command))
+    app.add_handler(CommandHandler("weather", weather_command))
+    app.add_handler(CommandHandler("remind", remind_command))
+    
+    # --- Shared Life ---
+    app.add_handler(CommandHandler("grocery", grocery_command))
+    app.add_handler(CommandHandler("grocery_remove", grocery_remove_command))
+    app.add_handler(CommandHandler("grocery_empty", grocery_empty_command))
+    app.add_handler(CommandHandler("decide", decide_command))
+    app.add_handler(CommandHandler("recipe", recipe_command))
+    
+    # --- Health ---
+    app.add_handler(CommandHandler("train", train_command))
+    app.add_handler(CommandHandler("stats", stats_command))
+    
+    # --- Fun & Extras ---
+    app.add_handler(CommandHandler("dateidea", dateidea_command))
+    app.add_handler(CommandHandler("cat", cat_command))
+
+    # --- Voice Integration ---
+    app.add_handler(MessageHandler(filters.VOICE, voice_handler))
+    
+    app.add_error_handler(error_handler)
+    
+    logger.info("✅ Polling started successfully.")
+    app.run_polling(drop_pending_updates=True)
+
+# ==========================================
 # MAIN INVINCIBLE LOOP
 # ==========================================
 if __name__ == "__main__":
@@ -48,45 +92,11 @@ if __name__ == "__main__":
     else:
         while True:
             try:
-                logger.info("🤖 Starting Modular MattouBot...")
-                app = Application.builder().token(TOKEN).build()
-                
-                # --- General & Help ---
-                app.add_handler(CommandHandler("start", start_command))
-                app.add_handler(CommandHandler("help", help_command))
-                
-                # --- Finance & News ---
-                app.add_handler(CommandHandler("portfolio", portfolio_command))
-                app.add_handler(CommandHandler("news", news_command))
-                
-                # --- Knowledge & Utility ---
-                app.add_handler(CommandHandler("research", research_command))
-                app.add_handler(CommandHandler("weather", weather_command))
-                app.add_handler(CommandHandler("remind", remind_command))
-                
-                # --- Shared Life ---
-                app.add_handler(CommandHandler("grocery", grocery_command))
-                app.add_handler(CommandHandler("grocery_remove", grocery_remove_command))
-                app.add_handler(CommandHandler("grocery_empty", grocery_empty_command))
-                app.add_handler(CommandHandler("decide", decide_command))
-                app.add_handler(CommandHandler("recipe", recipe_command))
-                
-                # --- Health ---
-                app.add_handler(CommandHandler("train", train_command))
-                app.add_handler(CommandHandler("stats", stats_command))
-                
-                # --- Fun & Extras ---
-                app.add_handler(CommandHandler("dateidea", dateidea_command))
-                app.add_handler(CommandHandler("cat", cat_command))
-
-                # --- Voice Integration ---
-                app.add_handler(MessageHandler(filters.VOICE, voice_handler))
-                
-                app.add_error_handler(error_handler)
-                
-                logger.info("✅ Polling started successfully.")
-                app.run_polling(drop_pending_updates=True)
-                
+                # Running the bot inside this function call isolates the asyncio loop
+                run_bot()
+            except KeyboardInterrupt:
+                logger.info("🛑 Bot stopped manually by user.")
+                break
             except Exception as e:
                 logger.error(f"❌ Critical App Crash: {e}")
             
