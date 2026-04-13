@@ -8,7 +8,7 @@ from modules.database import init_db
 from modules.config import TOKEN
 
 from modules.commands import (
-    start_command, help_command, portfolio_command, news_command,
+    start_command, portfolio_command, news_command,
     research_command, weather_command, remind_command,
     grocery_command, grocery_remove_command, grocery_empty_command,
     decide_command, recipe_command, train_command, stats_command,
@@ -43,7 +43,6 @@ def run_bot():
     
     # --- General & Help ---
     app.add_handler(CommandHandler("start", start_command))
-    app.add_handler(CommandHandler("help", help_command))
     
     # --- Finance & News ---
     app.add_handler(CommandHandler("portfolio", portfolio_command))

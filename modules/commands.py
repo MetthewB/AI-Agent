@@ -42,22 +42,28 @@ def get_lang_rule(context: ContextTypes.DEFAULT_TYPE) -> str:
     )
 
 def parse_time_string(time_str: str) -> int:
-    """Parses strings like '10', '1h30', '50s' into total seconds."""
+    """Parses strings like '10', '1.5h', '90m', '45s' into total seconds."""
     time_str = time_str.lower().strip()
-    if time_str.isdigit():
-        return int(time_str) * 60
-    if re.match(r'^\d+h\d+$', time_str):
+    
+    if time_str.replace('.', '', 1).isdigit():
+        return int(float(time_str) * 60)
+        
+    if re.match(r'^\d+(\.\d+)?h\d+$', time_str):
         time_str += 'm'
+        
     total_seconds = 0
-    matches = re.findall(r'(\d+)([hms])', time_str)
+    matches = re.findall(r'([\d\.]+)([hms])', time_str)
+    
     if not matches:
         raise ValueError("Could not parse time format.")
+        
     for amount, unit in matches:
-        val = int(amount)
+        val = float(amount)
         if unit == 'h': total_seconds += val * 3600
         elif unit == 'm': total_seconds += val * 60
         elif unit == 's': total_seconds += val
-    return total_seconds
+        
+    return int(total_seconds)
 
 
 # ==========================================
@@ -69,19 +75,7 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     welcome = (
         "<b>Hello! I am MattouBot, meow.</b> 🐾\n\n"
-        "Here is what I can do for you:\n"
-        "• /help - Open the command center\n"
-        "• /portfolio - Live market status\n"
-        "• /weather - Lausanne conditions\n"
-    )
-    await update.message.reply_text(welcome, parse_mode=ParseMode.HTML)
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update): return
-    logger.info(f"▶️ User {update.effective_chat.id} triggered /help")
-    
-    help_text = (
-        "🐾 <b>MattouBot Command Center</b> 🐾\n\n"
+        "Here is what I can do for you:\n\n"
         "<b>📈 Finance & News</b>\n"
         "• /portfolio - Live market status\n"
         "• /news - Global & European geopolitics\n\n"
@@ -101,10 +95,9 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /stats - Weekly performance review\n\n"
         "<b>🎉 Fun & Extras</b>\n"
         "• /cat - Instant feline dopamine\n"
-        "• /dateidea [city] - Generate a date idea\n"
+        "• /dateidea [city] - Generate a date idea"
     )
-    await update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
-
+    await update.message.reply_text(welcome, parse_mode=ParseMode.HTML)
 
 # ==========================================
 # FINANCE & NEWS COMMANDS
@@ -113,7 +106,9 @@ async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     logger.info(f"▶️ User {update.effective_chat.id} triggered /portfolio")
     
+    status_msg = await update.message.reply_text("📈 <i>Fetching live market data...</i>", parse_mode=ParseMode.HTML)
     stats = []
+    
     for ticker, name in PORTFOLIO_MAP.items():
         try:
             stock = yf.Ticker(ticker)
@@ -123,16 +118,18 @@ async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 current = data['Close'].iloc[-1]
                 prev = data['Close'].iloc[-2]
                 pct = ((current - prev) / prev) * 100
-                stats.append(f"• {name}:\n  <code>{current:.2f} ({pct:+.2f}%)</code>")
+                
+                indicator = "🟢" if pct >= 0 else "🔴"
+                stats.append(f"• <b>{name}</b>:\n  <code>{indicator} {current:.2f} ({pct:+.2f}%)</code>")
             else:
-                stats.append(f"• {name}:\n  <code>⚠️ Market closed</code>")
+                stats.append(f"• <b>{name}</b>:\n  <code>⚠️ Market closed</code>")
         except Exception as e:
             logger.error(f"❌ Portfolio Error for {ticker}: {e}")
-            stats.append(f"• {name}:\n  <code>⚠️ Fetch failed</code>")
+            stats.append(f"• <b>{name}</b>:\n  <code>⚠️ Fetch failed</code>")
     
     header = "📊 <b>Live Market Portfolio</b>\n━━━━━━━━━━━━━━━━━━━\n"
     body = "\n".join(stats)
-    await update.message.reply_text(f"{header}{body}", parse_mode=ParseMode.HTML)
+    await status_msg.edit_text(f"{header}{body}", parse_mode=ParseMode.HTML)
 
 async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
@@ -152,15 +149,26 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         news_context = "\n".join(raw_news)
         prompt = f"""
-        Summarize these news headlines into a single, natural paragraph.
-        Focus only on major geopolitics for World, Switzerland, and France.
-        RULES:
-        - Speak like a helpful assistant.
-        - Use NO MARKDOWN (no stars, no bullets).
-        - Format key entities (countries, leaders) using HTML <b> tags.
-        - Use exactly 2 emojis.
-        Headlines:
+        [ROLE]
+        You are a highly analytical Geopolitical Briefing Officer. Your task is to provide a high-level executive summary of current events for a VIP client.
+
+        [CONTEXT]
+        The following raw headlines have been gathered from international, Swiss, and French news sources over the last 24 hours:
         {news_context}
+
+        [TASK]
+        Synthesize the headlines into a single, natural, and cohesive paragraph. Your goal is to connect the dots between events where possible, providing a "big picture" view of the current geopolitical landscape.
+
+        [INSTRUCTIONS & CLARIFICATIONS]
+        1. OBJECTIVITY: Maintain a neutral, journalistic tone. Do not add personal opinions or speculative commentary.
+        2. NO HALLUCINATION: If the headlines do not provide information for one of the target regions (World, Switzerland, or France), simply focus on the data available. Do not invent news.
+        3. HTML FORMATTING: You MUST use HTML <b> tags for all key entities (countries, organizations, or world leaders). 
+        4. MARKDOWN BAN: Strictly avoid all Markdown formatting (no asterisks, no hashtags).
+        5. LANGUAGE: Adhere strictly to the language preference provided in the resume below.
+        6. EMOJIS: Include exactly 2 relevant emojis at the end of the text.
+
+        [RESUME / OUTPUT STRUCTURE]
+        A single paragraph of 4-6 sentences. Start directly with the briefing—no introductory pleasantries like "Here is your news."
         """
         
         prompt += get_lang_rule(context)
@@ -194,30 +202,43 @@ async def research_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if headlines:
             headlines_text = "\n".join(headlines)
             prompt = f"""
-            You are a strict, highly accurate intelligence analyst.
-            Based ONLY on the following headlines, provide a 3-sentence summary of the current situation regarding '{query}'.
-            
-            CRITICAL RULES:
-            1. You are strictly forbidden from adding outside information or guessing.
-            2. If these headlines are completely irrelevant to '{query}', or too vague to summarize, DO NOT attempt to write a summary. Instead, reply EXACTLY with:
-            "⚠️ <i>The recent news headlines do not contain enough relevant information to provide a reliable summary.</i>"
-            3. Use <b> tags for key entities. No markdown asterisks.
-            
-            HEADLINES:
+            [ROLE]
+            You are a senior Intelligence Analyst specializing in OSINT (Open Source Intelligence). Your standard is absolute factual accuracy and source-derived reporting.
+
+            [SOURCE MATERIAL]
+            Topic: {query}
+            Headlines:
             {headlines_text}
+            
+            [TASK]
+            Provide a 3-sentence situation report on '{query}' based EXCLUSIVELY on the provided headlines.
+
+            [INSTRUCTIONS & CLARIFICATIONS]
+            1. STRICT SOURCE ADHERENCE: You are strictly forbidden from using your internal training data to add facts not found in the headlines. If the headlines are vague or irrelevant to the topic, you MUST NOT guess.
+            2. RELEVANCE CHECK: If the provided headlines do not offer enough specific information to answer the query '{query}', stop immediately.
+            3. NEGATIVE RESPONSE: If step 2 applies, reply EXACTLY and ONLY with: 
+               "⚠️ <i>The recent news headlines do not contain enough relevant information to provide a reliable summary.</i>"
+            4. FORMATTING: Use HTML <b> tags for names, locations, and key dates. ABSOLUTELY NO MARKDOWN (no asterisks).
+
+            [RESUME / OUTPUT STRUCTURE]
+            Exactly three sentences. No preamble.
             """
         else:
             prompt = f"""
-            You are a strict, highly accurate research assistant. 
-            Your task is to explain the topic '{query}'.
-            
-            CRITICAL RULES:
-            1. You are strictly forbidden from guessing, assuming, or hallucinating facts.
-            2. If '{query}' refers to an event where facts are not fully confirmed, state ONLY what is officially known.
-            3. If you do not have enough verified factual knowledge to write a 3-sentence summary, DO NOT guess. Instead, reply EXACTLY with:
-            "⚠️ <i>I do not have enough verified, reliable information in my database to summarize this topic accurately.</i>"
-            
-            If you DO have the facts, provide a concise 3-sentence summary using <b> tags for important keywords. No markdown asterisks.
+            [ROLE]
+            You are a highly accurate Research Librarian.
+
+            [TASK]
+            Explain the core concept or historical facts of '{query}'.
+
+            [INSTRUCTIONS & CLARIFICATIONS]
+            1. FACTUAL GROUNDING: Rely only on verified, objective information. If this is an ongoing event with conflicting reports, state only what is confirmed.
+            2. UNCERTAINTY PROTOCOL: If you do not have definitive knowledge of '{query}', do not attempt a summary. Instead, reply EXACTLY with:
+               "⚠️ <i>I do not have enough verified, reliable information in my database to summarize this topic accurately.</i>"
+            3. FORMATTING: Use HTML <b> tags for key entities. No markdown.
+
+            [RESUME / OUTPUT STRUCTURE]
+            A concise 3-sentence summary.
             """
             
         prompt += get_lang_rule(context)
@@ -254,23 +275,30 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         condition = current['weatherDesc'][0]['value'] # wttr.in gives us the text description directly!
         
         prompt = f"""
-        CONTEXT:
+        [ROLE]
+        You are a witty, slightly sassy, and caring virtual assistant managing a couple's daily life. You have a sharp tongue but always want them to look good and feel comfortable.
+
+        [CONTEXT]
         Location: {display_name}
-        Temperature: {temp}°C
-        Conditions: {condition}
+        Current Temperature: {temp}°C
+        Sky Conditions: {condition}
 
-        TASK:
-        Write a short, 2-sentence cute and slightly sassy weather report for a couple. 
-        Advise them on what to wear or if it's a good day to stay inside.
+        [TASK]
+        Write a short, high-personality weather report for the couple. Your goal is to tell them exactly how the weather feels and give them a specific "outfit or activity" recommendation based on the current data.
 
-        CRITICAL RULES:
-        1. ONLY output the 2-sentence report. 
-        2. DO NOT include any introductory text, self-corrections, or "Here is your report."
-        3. Format the temperature ({temp}°C) using HTML <b> tags. 
-        4. ABSOLUTELY NO MARKDOWN (no asterisks *).
-        5. Use exactly 2 emojis.
+        [INSTRUCTIONS & CLARIFICATIONS]
+        1. LENGTH: Exactly 2 sentences. No more, no less.
+        2. TONE: Cute, sassy, and practical. 
+        3. DATA-DRIVEN ADVICE: If it is cold (below 10°C), mention layers or warmth. If it is hot (above 25°C), mention hydration or light fabrics. If it is raining/cloudy, suggest staying in or bringing an umbrella.
+        4. NO FILLER: Start the first sentence immediately. Do not say "Here is your report" or "Based on the data."
+        5. HTML FORMATTING: You MUST use HTML <b> tags for the temperature ({temp}°C). 
+        6. MARKDOWN BAN: Strictly avoid all Markdown formatting (no asterisks).
+        7. EMOJIS: Use exactly 2 emojis relevant to the weather or the sassy tone.
+
+        [RESUME / OUTPUT STRUCTURE]
+        A high-quality 2-sentence briefing.
         """
-        
+
         prompt += get_lang_rule(context)
         forecast = await ask_llm(prompt, max_tokens=100)
         await status_msg.edit_text(f"🌍 <b>Forecast for {display_name}</b>\n\n{forecast}", parse_mode=ParseMode.HTML)
@@ -345,7 +373,7 @@ async def grocery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text("🛒 <b>The grocery list is currently empty!</b>", parse_mode=ParseMode.HTML)
             else:
                 formatted_list = "\n".join([f"• {i}" for i in items])
-                await update.message.reply_text(f"🛒 <b>Shared Shopping List:</b>\n\n{formatted_list}", parse_mode=ParseMode.HTML)
+                await update.message.reply_text(f"🛒 <b>Shared Shopping List ({len(items)} items):</b>\n\n{formatted_list}", parse_mode=ParseMode.HTML)
         except Exception as e:
             logger.error(f"❌ Grocery Read Error: {e}")
             await update.message.reply_text("⚠️ <i>Failed to read the list from the database!</i>", parse_mode=ParseMode.HTML)
@@ -353,7 +381,8 @@ async def grocery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     try:
         grocery_collection.insert_one({"item": item})
-        await update.message.reply_text(f"✅ Added <b>{item}</b> to the list!", parse_mode=ParseMode.HTML)
+        current_count = grocery_collection.count_documents({})
+        await update.message.reply_text(f"✅ Added <b>{item}</b>!\n<i>There are now {current_count} items on the list.</i>", parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"❌ Grocery Add Error: {e}")
         await update.message.reply_text("⚠️ <i>Failed to add the item. The cart is stuck!</i>", parse_mode=ParseMode.HTML)
@@ -424,8 +453,12 @@ async def decide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
         
     choice = random.choice(options)
-    status_msg = await update.message.reply_text("⚖️ <i>The AI is weighing the options...</i>", parse_mode=ParseMode.HTML)
-    await asyncio.sleep(2)
+    
+    status_msg = await update.message.reply_text("⚖️ <i>Weighing the options...</i>", parse_mode=ParseMode.HTML)
+    await asyncio.sleep(1)
+    await status_msg.edit_text("🎲 <i>Running the algorithms...</i>", parse_mode=ParseMode.HTML)
+    await asyncio.sleep(1.2)
+    
     await status_msg.edit_text(f"🎯 <b>Decision Made:</b>\n\nI have spoken. You are going with: <b>{choice}</b>", parse_mode=ParseMode.HTML)
 
 async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -439,18 +472,33 @@ async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
     status_msg = await update.message.reply_text("👨‍🍳 <i>Putting on my chef's hat and reviewing your ingredients...</i>", parse_mode=ParseMode.HTML)
     prompt = f"""
-    You are a Michelin-star chef helping a couple cook dinner. They only have the following ingredients available:
+    [ROLE]
+    You are an inventive Michelin-star chef who specializes in "fridge-clearing" gourmet cooking—creating incredible meals from limited, random ingredients.
+
+    [CONTEXT]
+    The couple has only these ingredients available:
     {ingredients}
     
-    Invent a creative, delicious, and easy-to-make recipe using mostly just these ingredients.
-    
-    CRITICAL RULES:
-    1. Provide a catchy, appetizing Title.
-    2. Provide a short "Ingredients list" and a concise step-by-step "Instructions" list.
-    3. Format the output cleanly using ONLY Telegram-supported HTML tags: <b> and <i>.
-    4. FORBIDDEN HTML: Do NOT use <ol>, <ul>, <li>, or <br> tags. Use standard text numbers (1., 2., 3.) or bullet points (•) for your lists.
-    5. FORBIDDEN MARKDOWN: Do NOT use markdown asterisks (* or **). 
-    6. Keep the tone encouraging and culinary.
+    [TASK]
+    Invent a creative, delicious, and easy-to-make dinner recipe using the provided ingredients as the primary components.
+
+    [INSTRUCTIONS & CLARIFICATIONS]
+    1. INGREDIENT STRICTNESS: You MUST prioritize the listed ingredients. You may assume the couple has a "basic pantry" (oil, salt, pepper, water, and perhaps one common dried spice), but do not include any other major ingredients (e.g., if chicken isn't listed, don't include it).
+    2. CULINARY TONE: Be encouraging, professional, and slightly romantic, as if you are coaching them through a fun date-night cooking session.
+    3. HTML FORMATTING: Use ONLY Telegram-supported HTML (<b> for titles, <i> for emphasis). 
+    4. MARKDOWN BAN: Strictly avoid all Markdown (no asterisks *, no hashtags #).
+    5. LIST FORMATTING: Telegram HTML does not support <ol> or <li>. You MUST use standard text bullet points (•) for ingredients and numbers (1., 2., 3.) for instructions.
+
+    [RESUME / OUTPUT STRUCTURE]
+    <b>[Catchy Recipe Title]</b>
+
+    <b>🛒 Ingredients:</b>
+    • [Item 1]
+    • [Item 2]
+
+    <b>👨‍🍳 Instructions:</b>
+    1. [Step 1]
+    2. [Step 2]
     """
     prompt += get_lang_rule(context)
     recipe_output = await ask_llm(prompt)
@@ -690,19 +738,28 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     vibe = random.choice(vibes)
     
     prompt = f"""
-    Suggest one unique, specific, and fun date idea for a couple located in or near {display_location}.
-    
-    CURRENT CONTEXT:
+    [ROLE]
+    You are a creative, thoughtful, and highly knowledgeable Romantic Concierge with deep expertise in local events and seasonal activities.
+
+    [CONTEXT]
+    - Location: {display_location}
     - Today's Date: {current_date}
-    - Current Weather: {temp}°C and {weather_condition}
+    - Current Weather: {temp}°C, {weather_condition}
     - Requested Vibe: {vibe}
     
-    CRITICAL RULES:
-    1. The date idea MUST strictly make sense for the current weather and season.
-    2. Ensure the location makes geographical sense for {display_location}.
-    3. Provide a catchy Title, a short 2-sentence description, and an estimated cost (e.g., Free, $$, $$$).
-    4. Format the output cleanly using basic HTML tags like <b> for bolding. No markdown asterisks.
-    5. EXACTLY 2 or 3 emojis must be used in your entire response. No more, no less.
+    [TASK]
+    Suggest one unique, specific, and fun date idea tailored perfectly to the location, current weather, and requested vibe.
+
+    [INSTRUCTIONS & CLARIFICATIONS]
+    1. WEATHER GROUNDING: You MUST check the weather data ({temp}°C, {weather_condition}). If it is raining, cold, or snowing, the date must be indoors or involve warmth. If it is sunny and pleasant, prioritize the outdoors.
+    2. SEASONAL AWARENESS: Ensure the activity is possible on {current_date}. Do not suggest Christmas markets in April or summer music festivals in November.
+    3. LOCAL LOGIC: The activity must be geographically relevant to {display_location}. Do not suggest generic activities (like "go to a park") if there is a specific local landmark or type of venue that fits better.
+    4. FORMATTING: Use HTML <b> tags for the title and the price level. ABSOLUTELY NO MARKDOWN (no asterisks).
+    5. EMOJIS: Use exactly 2 or 3 emojis total.
+
+    [RESUME / OUTPUT STRUCTURE]
+    <b>[Catchy & Romantic Title]</b> [Cost: Free/$/$$/$$$]
+    [A 2-sentence engaging description that explains the activity and specifically mentions why it is perfect for the current {weather_condition} weather.]
     """
     
     prompt += get_lang_rule(context)
