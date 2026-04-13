@@ -78,7 +78,7 @@ def run_bot():
     app.run_polling(drop_pending_updates=True)
 
 # ==========================================
-# MAIN INVINCIBLE LOOP
+# MAIN EXECUTION
 # ==========================================
 if __name__ == "__main__":
     logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -88,17 +88,11 @@ if __name__ == "__main__":
     init_db()
     
     if not TOKEN:
-        logger.error("❌ TELEGRAM_TOKEN missing!")
+        logger.error("❌ TELEGRAM_TOKEN missing in environment variables!")
     else:
-        while True:
-            try:
-                # Running the bot inside this function call isolates the asyncio loop
-                run_bot()
-            except KeyboardInterrupt:
-                logger.info("🛑 Bot stopped manually by user.")
-                break
-            except Exception as e:
-                logger.error(f"❌ Critical App Crash: {e}")
-            
-            logger.warning("⚠️ Bot stopped! Rebuilding in 10 seconds...")
-            time.sleep(10)
+        try:
+            run_bot()
+        except KeyboardInterrupt:
+            logger.info("🛑 Bot stopped manually by user.")
+        except Exception as e:
+            logger.error(f"❌ Critical App Crash: {e}")
