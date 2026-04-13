@@ -506,6 +506,7 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
        - If they did a heavy "Leg Day" yesterday, running or cycling today should be modified for active recovery.
        - If they did heavy Cardio recently, their upper body is completely fresh for weightlifting.
     2. Date Math: Compare history dates to Today's Date ({current_date}). Calculate exact rest days. Do not assume a workout was yesterday unless the dates are exactly 1 day apart.
+    3. Running Pace Intelligence: If the client requests a RUNNING workout, you MUST analyze their recent running history to calculate their baseline pace (Duration / Distance). Based on this historical baseline and their requested intensity, you MUST prescribe a specific target pace in minutes per kilometer (min/km) in the Main Set.
     
     FORMATTING RULES:
     - Use ONLY basic HTML tags (<b> and <i>). 
@@ -525,7 +526,7 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     • [Item 1]
     
     <b>⚡ Main Set</b>
-    • [Item 1]
+    • [Item 1] (If running, explicitly state the target pace in min/km)
     
     <b>🧘 Cool-Down</b>
     • [Item 1]

@@ -18,7 +18,7 @@ from modules.commands import (
 from modules.voice_router import voice_handler
 
 # ==========================================
-# HEALTH CHECK SERVER (RENDER KEEP-AWAKE)
+# HEALTH CHECK SERVER
 # ==========================================
 class HealthCheckHandler(BaseHTTPRequestHandler):
     def do_GET(self):
@@ -34,7 +34,7 @@ def run_health_check():
     server.serve_forever()
 
 # ==========================================
-# BOT INSTANCE (Clean Scope)
+# BOT INSTANCE
 # ==========================================
 def run_bot():
     """Builds and runs the bot in an isolated scope to prevent Event Loop crashes."""
