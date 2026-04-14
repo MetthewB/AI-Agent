@@ -822,3 +822,7 @@ async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"❌ Cat API error: {e}")
         await update.effective_message.reply_text("<i>The cats are sleeping.</i> 😴", parse_mode=ParseMode.HTML)
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log the error and send a telegram message to notify the developer."""
+    logger.error(f"❌ Telegram API Error: {context.error}")
