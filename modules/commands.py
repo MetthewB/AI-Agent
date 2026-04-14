@@ -301,7 +301,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         """
 
         prompt += get_lang_rule(context)
-        forecast = await ask_llm(prompt, max_tokens=100)
+        forecast = await ask_llm(prompt, max_tokens=200)
         await status_msg.edit_text(f"🌍 <b>Forecast for {display_name}</b>\n\n{forecast}", parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"❌ Weather Command Error: {e}")
