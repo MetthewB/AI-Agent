@@ -31,33 +31,47 @@ async def parse_intent(user_text: str) -> dict:
     """
     prompt = f"""
     [ROLE]
-    You are an Intent Router for a Telegram Bot.
-    
-    [TASK]
-    Analyze the user's message and categorize it into one of the following ACTIONS.
-    If the message doesn't match an action, return ACTION: chat.
+    You are a world-class NLU (Natural Language Understanding) routing engine. 
+    Your job is to decipher user intent, extract necessary parameters, and map them to strict system actions.
 
-    [AVAILABLE ACTIONS]
-    - grocery_add: User wants to add an item to the shopping list. (data = item)
-    - grocery_remove: User wants to delete/remove an item from the list. (data = item)
-    - grocery_list: User wants to see the current shopping list. (data = "")
-    - weather: User is asking about the weather/temperature. (data = city)
-    - train: User wants a workout or training plan. (data = sport/details)
-    - portfolio: User wants to see stock/market prices. (data = "")
-    - news: User wants a geopolitical news briefing. (data = "")
-    - remind: User wants to set a timer or reminder. (data = "time message", e.g., "15m check oven")
-    - cat: User wants a cat gif. (data = "")
-    - research: User wants a deep dive or summary of a specific topic. (data = topic)
-    - recipe: User wants a recipe based on ingredients. (data = ingredients)
-    - dateidea: User wants a date idea. (data = city)
-    - stats: User wants to see their weekly Strava stats. (data = "")
-    - chat: General conversation or questions not covered above. (data = user's message)
+    [CORE RULES]
+    1. TYPO TOLERANCE: Users type fast on mobile. Aggressively autocorrect intent in your mind (e.g., "portgolio" = portfolio, "weathr" = weather, "switzerkland" = switzerland).
+    2. SEMANTIC MATCHING: Look for the *meaning* behind the words, not just exact keywords.
+    3. THE "CHAT" FALLBACK: Only use the "chat" action if the message is purely conversational (e.g., "Hello," "How are you?," "Tell me a joke"). If it asks for facts, news, or data, route it to the specific tools below.
+
+    [ACTION DICTIONARY]
+    Format -> action_name: [Trigger description] -> Data Payload
+
+    --- LISTS & FOOD ---
+    - grocery_add: User wants to add/buy an item. -> data: "the specific item"
+    - grocery_remove: User wants to remove/delete/cross off an item. -> data: "the specific item"
+    - grocery_list: User wants to see/read the current shopping list. -> data: ""
+    - recipe: User wants cooking ideas or recipes based on items. -> data: "the ingredients"
+
+    --- DATA & INFO ---
+    - weather: User asks about temperature, sun, rain, or forecasts. -> data: "city name" (leave empty if no city mentioned)
+    - portfolio: User asks about stocks, markets, investments, or "portfolio" (and typos). -> data: ""
+    - news: User asks for global news, geopolitics, or headlines. -> data: ""
+    - research: User asks "How is [topic]", "What is the status of [topic]", or wants a deep dive/facts (e.g., "job market in switzerland", "history of Rome"). -> data: "the topic"
+
+    --- HEALTH & LIFESTYLE ---
+    - train: User wants a workout, run, or training plan. -> data: "sport and details"
+    - stats: User wants to see their Strava, weekly performance, or recent workouts. -> data: ""
+    - dateidea: User wants a romantic plan or date idea. -> data: "city name"
+
+    --- UTILITIES & FUN ---
+    - remind: User wants a timer, alarm, or reminder. -> data: "time + message" (e.g., "15m flip the laundry")
+    - cat: User wants a cat gif or feline dopamine. -> data: ""
+    
+    --- FALLBACK ---
+    - chat: General greetings, casual conversation, or abstract questions not fitting above. -> data: "the original user text"
 
     [USER MESSAGE]
     "{user_text}"
 
-    [OUTPUT FORMAT]
-    Return ONLY a JSON-style string: {{"action": "action_name", "data": "extracted_subject_or_query"}}
+    [OUTPUT STRICT FORMAT]
+    You must output ONLY a valid JSON object. No explanations, no markdown blocks.
+    {{"action": "exact_action_name", "data": "extracted_string"}}
     """
     
     response = await ask_llm(prompt)
@@ -137,8 +151,18 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif action == "chat":
         status_msg = await update.message.reply_text("<i>Thinking...</i>", parse_mode=ParseMode.HTML)
-        response = await ask_llm(user_text)
-        await status_msg.edit_text(response, parse_mode=ParseMode.HTML)
+        try:
+            response = await ask_llm(user_text)
+            
+            if not response:
+                await status_msg.edit_text("⚠️ <i>The AI didn't return an answer. Is the API down?</i>", parse_mode=ParseMode.HTML)
+            else:
+                clean_response = response.replace("*", "").replace("#", "")
+                await status_msg.edit_text(clean_response, parse_mode=ParseMode.HTML)
+                
+        except Exception as e:
+            logger.error(f"❌ General Chat Error: {e}")
+            await status_msg.edit_text(f"❌ <i>My brain is foggy: {str(e)}</i>", parse_mode=ParseMode.HTML)
 
 
 # ==========================================
