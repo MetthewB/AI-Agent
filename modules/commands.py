@@ -295,7 +295,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         - If < 10°C: Recommend layers/warmth.
         - If > 25°C: Recommend hydration/light clothes.
         - If rain/clouds: Recommend umbrella/coziness.
-        4. HTML ONLY: Use <b> only for the temperature ({temp}°C) and <i> for your sassy advice. 
+        4. HTML ONLY: Use <b> only for the temperature ({temp}°C) and <i> for your sassy advice. Ensure every <b> has a closing </b> and every <i> has a closing </i>.
         5. NO MARKDOWN: Absolutely no asterisks (*) or hashtags (#). Use standard punctuation only.
         6. EMOJIS: Include exactly 2 emojis. No more, no less.
 

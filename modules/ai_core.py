@@ -33,7 +33,9 @@ async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
                 
                 logger.info("✅ LLM response generated successfully.")
                 raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
-                clean_text = raw_text.replace("**", "").replace("*", "").replace("##", "").replace("#", "")
+                clean_text = raw_text.replace("*", "").replace("#", "").replace("`", "")
+                if "<b>" in clean_text and "</b>" not in clean_text: clean_text += "</b>"
+                if "<i>" in clean_text and "</i>" not in clean_text: clean_text += "</i>"
                 return clean_text
                 
             except httpx.HTTPStatusError as e:
