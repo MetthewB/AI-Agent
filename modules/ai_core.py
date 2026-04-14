@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 # ==========================================
 # 1. INITIALIZE THE LLM CLIENT
 # ==========================================
-llm_client = AsyncInferenceClient(model="google/gemma-2-2b-it", token=HF_TOKEN)
+llm_client = AsyncInferenceClient(model="HuggingFaceH4/zephyr-7b-beta", token=HF_TOKEN)
 
 # ==========================================
 # 2. CORE INFERENCE FUNCTION
