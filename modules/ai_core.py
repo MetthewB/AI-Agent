@@ -10,7 +10,7 @@ logger = logging.getLogger(__name__)
 async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
     """Sends a prompt to Google AI Studio (Gemma 4) asynchronously."""
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemma-4-e2b-it:generateContent?key={GOOGLE_API_KEY}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GOOGLE_API_KEY}"
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
