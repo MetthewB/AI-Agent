@@ -32,7 +32,9 @@ async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
                 res.raise_for_status() 
                 
                 logger.info("✅ LLM response generated successfully.")
-                return res.json()['candidates'][0]['content']['parts'][0]['text']
+                raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
+                clean_text = raw_text.replace("**", "").replace("*", "").replace("##", "").replace("#", "")
+                return clean_text
                 
             except httpx.HTTPStatusError as e:
                 if e.response.status_code in [503, 429]:
