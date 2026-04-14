@@ -33,14 +33,7 @@ async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
                 
                 logger.info("✅ LLM response generated successfully.")
                 raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
-                clean = raw_text.replace("**", "").replace("*", "").replace("#", "").replace("`", "")
-                clean = clean.replace("< ", "&lt; ").replace(" <", " &lt;")
-                if clean.count("<b>") > clean.count("</b>"):
-                    clean += "</b>"
-                if clean.count("<i>") > clean.count("</i>"):
-                    clean += "</i>"
-                if clean.endswith("<b>") or clean.endswith("<i>"):
-                    clean = clean[:-3]
+                clean = raw_text.replace("*", "").replace("#", "").replace("`", "").replace("<", "").replace(">", "")
 
                 return clean.strip()
                 
