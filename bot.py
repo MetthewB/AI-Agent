@@ -3,16 +3,14 @@ import time
 import logging
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
-from telegram.ext import Application, CommandHandler, MessageHandler, filters
+from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 from modules.database import init_db
 from modules.config import TOKEN
 
 from modules.commands import (
-    start_command, portfolio_command, news_command,
-    research_command, weather_command, remind_command,
-    grocery_command, grocery_remove_command, grocery_empty_command,
-    decide_command, recipe_command, train_command, stats_command,
-    dateidea_command, cat_command, error_handler
+    start_command, portfolio_command, news_command, research_command, weather_command, remind_command,
+    grocery_command, grocery_remove_command, grocery_empty_command, grocery_callback_handler, decide_command, 
+    recipe_command, train_command, stats_command, dateidea_command, cat_command, error_handler
 )
 
 from modules.voice_router import voice_handler
@@ -57,8 +55,10 @@ def run_bot():
     app.add_handler(CommandHandler("grocery", grocery_command))
     app.add_handler(CommandHandler("grocery_remove", grocery_remove_command))
     app.add_handler(CommandHandler("grocery_empty", grocery_empty_command))
+    app.add_handler(CallbackQueryHandler(grocery_callback_handler, pattern="^g_"))
     app.add_handler(CommandHandler("decide", decide_command))
     app.add_handler(CommandHandler("recipe", recipe_command))
+    app.add_handler(CallbackQueryHandler(recipe_command, pattern="^reroll_recipe$"))
     
     # --- Health ---
     app.add_handler(CommandHandler("train", train_command))
@@ -66,7 +66,9 @@ def run_bot():
     
     # --- Fun & Extras ---
     app.add_handler(CommandHandler("dateidea", dateidea_command))
+    app.add_handler(CallbackQueryHandler(dateidea_command, pattern="^reroll_dateidea$"))
     app.add_handler(CommandHandler("cat", cat_command))
+    app.add_handler(CallbackQueryHandler(cat_command, pattern="^reroll_cat$"))
 
     # --- Voice Integration ---
     app.add_handler(MessageHandler(filters.VOICE, voice_handler))

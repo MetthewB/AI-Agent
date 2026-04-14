@@ -8,7 +8,8 @@ import datetime
 import requests
 import yfinance as yf
 from bs4 import BeautifulSoup
-from telegram import Update
+from bson.objectid import ObjectId
+from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
@@ -359,84 +360,92 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================
 # SHARED LIFE COMMANDS
 # ==========================================
+def build_grocery_ui():
+    """Helper function to fetch the DB and build the interactive inline keyboard."""
+    try:
+        items_cursor = grocery_collection.find()
+        docs = list(items_cursor)
+        
+        if not docs:
+            return "🛒 <b>The grocery list is currently empty!</b>", None
+            
+        text = f"🛒 <b>Shared Shopping List ({len(docs)} items):</b>\n<i>Tap an item to cross it off!</i>"
+        
+        keyboard = []
+        for doc in docs:
+            item_name = doc['item']
+            item_id = str(doc['_id'])
+            keyboard.append([InlineKeyboardButton(f"❌ {item_name}", callback_data=f"g_rm_{item_id}")])
+            
+        keyboard.append([InlineKeyboardButton("🧹 Empty Entire List", callback_data="g_empty")])
+        
+        return text, InlineKeyboardMarkup(keyboard)
+    except Exception as e:
+        logger.error(f"❌ Grocery UI Build Error: {e}")
+        return "⚠️ <i>Database error.</i>", None
+
 async def grocery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     logger.info(f"▶️ User {update.effective_chat.id} triggered /grocery")
     item = " ".join(context.args)
     
     if not item:
-        try:
-            items_cursor = grocery_collection.find()
-            items = [doc["item"] for doc in items_cursor]
-            
-            if not items:
-                await update.message.reply_text("🛒 <b>The grocery list is currently empty!</b>", parse_mode=ParseMode.HTML)
-            else:
-                formatted_list = "\n".join([f"• {i}" for i in items])
-                await update.message.reply_text(f"🛒 <b>Shared Shopping List ({len(items)} items):</b>\n\n{formatted_list}", parse_mode=ParseMode.HTML)
-        except Exception as e:
-            logger.error(f"❌ Grocery Read Error: {e}")
-            await update.message.reply_text("⚠️ <i>Failed to read the list from the database!</i>", parse_mode=ParseMode.HTML)
+        text, reply_markup = build_grocery_ui()
+        await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         return
 
     try:
         grocery_collection.insert_one({"item": item})
-        current_count = grocery_collection.count_documents({})
-        await update.message.reply_text(f"✅ Added <b>{item}</b>!\n<i>There are now {current_count} items on the list.</i>", parse_mode=ParseMode.HTML)
+        text, reply_markup = build_grocery_ui()
+        await update.message.reply_text(f"✅ Added <b>{item}</b>!\n\n{text}", reply_markup=reply_markup, parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"❌ Grocery Add Error: {e}")
         await update.message.reply_text("⚠️ <i>Failed to add the item. The cart is stuck!</i>", parse_mode=ParseMode.HTML)
 
+async def grocery_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Listens for the user tapping the inline buttons."""
+    if not is_authorized(update): return
+    
+    query = update.callback_query
+    await query.answer() 
+    
+    data = query.data
+    
+    try:
+        if data.startswith("g_rm_"):
+            item_id = data.replace("g_rm_", "")
+            grocery_collection.delete_one({"_id": ObjectId(item_id)})
+            
+        elif data == "g_empty":
+            grocery_collection.delete_many({})
+            
+        text, reply_markup = build_grocery_ui()
+        
+        await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        
+    except Exception as e:
+        logger.error(f"❌ Grocery Callback Error: {e}")
+        pass
+
 async def grocery_remove_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
-    logger.info(f"▶️ User {update.effective_chat.id} triggered /grocery_remove")
     item_to_remove = " ".join(context.args).strip()
-    
-    if not item_to_remove:
-        await update.message.reply_text("⚠️ <b>Usage:</b> /grocery_remove [item name]\n<i>Example: /grocery_remove eggs</i>", parse_mode=ParseMode.HTML)
-        return
-        
+    if not item_to_remove: return
     try:
-        items_cursor = grocery_collection.find()
-        current_items = [doc["item"] for doc in items_cursor]
-        
-        if not current_items:
-            await update.message.reply_text("🛒 <b>The list is already empty!</b>", parse_mode=ParseMode.HTML)
-            return
-        
-        best_match = None
-        substring_matches = [i for i in current_items if item_to_remove.lower() in i.lower()]
-        
-        if substring_matches:
-            best_match = substring_matches[0]
-        else:
-            matches = difflib.get_close_matches(item_to_remove, current_items, n=1, cutoff=0.3)
-            if matches:
-                best_match = matches[0]
+        docs = list(grocery_collection.find())
+        current_items = [doc["item"] for doc in docs]
+        matches = [i for i in current_items if item_to_remove.lower() in i.lower()]
+        best_match = matches[0] if matches else (difflib.get_close_matches(item_to_remove, current_items, n=1, cutoff=0.3) or [None])[0]
         
         if best_match:
             grocery_collection.delete_one({"item": best_match})
-            await update.message.reply_text(f"✅ Removed <b>{best_match}</b> from the list!", parse_mode=ParseMode.HTML)
-        else:
-            await update.message.reply_text(f"⚠️ I couldn't find anything resembling <b>{item_to_remove}</b> in the list.", parse_mode=ParseMode.HTML)
-            
-    except Exception as e:
-        logger.error(f"❌ Grocery Remove Error: {e}")
-        await update.message.reply_text("⚠️ <i>Failed to remove the item from the database!</i>", parse_mode=ParseMode.HTML)
+            await update.message.reply_text(f"✅ Removed <b>{best_match}</b>!", parse_mode=ParseMode.HTML)
+    except Exception: pass
 
 async def grocery_empty_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
-    logger.info(f"▶️ User {update.effective_chat.id} triggered /grocery_empty")
-    
-    try:
-        result = grocery_collection.delete_many({})
-        if result.deleted_count > 0:
-            await update.message.reply_text(f"🧹 <b>Grocery list cleared!</b> ({result.deleted_count} items removed) Happy cooking! 🍳", parse_mode=ParseMode.HTML)
-        else:
-            await update.message.reply_text("🛒 <b>The list was already empty!</b>", parse_mode=ParseMode.HTML)
-    except Exception as e:
-        logger.error(f"❌ Grocery Clear Error: {e}")
-        await update.message.reply_text("⚠️ <i>Failed to clear the database!</i>", parse_mode=ParseMode.HTML)
+    grocery_collection.delete_many({})
+    await update.message.reply_text("🧹 <b>Grocery list cleared!</b>", parse_mode=ParseMode.HTML)
 
 async def decide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
@@ -463,14 +472,23 @@ async def decide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
-    logger.info(f"▶️ User {update.effective_chat.id} triggered /recipe")
-    ingredients = " ".join(context.args)
     
+    query = update.callback_query
+    if query:
+        await query.answer()
+        logger.info(f"▶️ User {update.effective_chat.id} triggered re-roll for /recipe")
+        ingredients = context.user_data.get('last_recipe', '')
+    else:
+        logger.info(f"▶️ User {update.effective_chat.id} triggered /recipe")
+        ingredients = " ".join(context.args)
+        context.user_data['last_recipe'] = ingredients
+        
     if not ingredients:
-        await update.message.reply_text("⚠️ <b>Usage:</b> /recipe [ingredient 1], [ingredient 2]", parse_mode=ParseMode.HTML)
+        await update.effective_message.reply_text("⚠️ <b>Usage:</b> /recipe [ingredient 1], [ingredient 2]", parse_mode=ParseMode.HTML)
         return
         
-    status_msg = await update.message.reply_text("👨‍🍳 <i>Putting on my chef's hat and reviewing your ingredients...</i>", parse_mode=ParseMode.HTML)
+    status_msg = await update.effective_message.reply_text("👨‍🍳 <i>Putting on my chef's hat and reviewing your ingredients...</i>", parse_mode=ParseMode.HTML)
+    
     prompt = f"""
     [ROLE]
     You are an inventive Michelin-star chef who specializes in "fridge-clearing" gourmet cooking—creating incredible meals from limited, random ingredients.
@@ -502,13 +520,18 @@ async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     prompt += get_lang_rule(context)
     recipe_output = await ask_llm(prompt)
+    
+    keyboard = [[InlineKeyboardButton("🔄 Re-roll", callback_data="reroll_recipe")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
     try:
-        await status_msg.edit_text(recipe_output, parse_mode=ParseMode.HTML)
+        await status_msg.edit_text(recipe_output, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"❌ HTML Parsing Error in Recipe: {e}")
         await status_msg.edit_text(
             f"👨‍🍳 <b>Here is your recipe!</b> (<i>HTML formatting disabled due to an AI glitch</i>):\n\n{recipe_output}", 
-            parse_mode=None
+            parse_mode=None,
+            reply_markup=reply_markup
         )
 
 
@@ -705,21 +728,27 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ==========================================
 async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
-    logger.info(f"▶️ User {update.effective_chat.id} triggered /dateidea")
     
-    location_query = " ".join(context.args) or "the Vaud/Valais region of Switzerland"
+    query = update.callback_query
+    if query:
+        await query.answer()
+        logger.info(f"▶️ User {update.effective_chat.id} triggered re-roll for /dateidea")
+        location_query = context.user_data.get('last_dateidea', 'the Vaud/Valais region of Switzerland')
+    else:
+        logger.info(f"▶️ User {update.effective_chat.id} triggered /dateidea")
+        location_query = " ".join(context.args) or "the Vaud/Valais region of Switzerland"
+        context.user_data['last_dateidea'] = location_query
+        
     display_location = location_query.title()
-    status_msg = await update.message.reply_text("<i>Checking the weather and thinking of something romantic...</i> 🍷", parse_mode=ParseMode.HTML)
+    status_msg = await update.effective_message.reply_text("<i>Checking the weather and thinking of something romantic...</i> 🍷", parse_mode=ParseMode.HTML)
     current_date = datetime.datetime.now().strftime("%A, %B %d, %Y")
     
     weather_condition = "Unknown"
     temp = "Unknown"
     
     try:
-        # Fetch weather directly based on the query string
         url = f"https://wttr.in/{location_query}?format=j1"
         headers = {"User-Agent": "MattouBot/1.0 (Telegram Assistant)"}
-        
         res = await asyncio.to_thread(requests.get, url, headers=headers, timeout=10)
         if res.status_code == 200:
             data = res.json()
@@ -758,19 +787,38 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     prompt += get_lang_rule(context)
     idea = await ask_llm(prompt) 
-    await status_msg.edit_text(idea, parse_mode=ParseMode.HTML)
+    
+    keyboard = [[InlineKeyboardButton("🔄 Re-roll", callback_data="reroll_dateidea")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await status_msg.edit_text(idea, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+
 
 async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
-    logger.info(f"▶️ User {update.effective_chat.id} triggered /cat")
+    
+    query = update.callback_query
+    if query:
+        await query.answer()
+        logger.info(f"▶️ User {update.effective_chat.id} triggered re-roll for /cat")
+    else:
+        logger.info(f"▶️ User {update.effective_chat.id} triggered /cat")
+        
     try:
         cat_url = f"https://api.thecatapi.com/v1/images/search?mime_types=gif"
         res = await asyncio.to_thread(requests.get, cat_url, timeout=10)
         data = res.json()
-        await update.message.reply_animation(data[0]['url'])
+        
+        keyboard = [[InlineKeyboardButton("🔄 Another cat!", callback_data="reroll_cat")]]
+        reply_markup = InlineKeyboardMarkup(keyboard)
+        
+        if query:
+            try:
+                await update.effective_message.delete()
+            except Exception:
+                pass
+                
+        await update.effective_message.reply_animation(data[0]['url'], reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"❌ Cat API error: {e}")
-        await update.message.reply_text("<i>The cats are sleeping.</i> 😴", parse_mode=ParseMode.HTML)
-
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    logger.error(f"❌ Telegram API Error: {context.error}")
+        await update.effective_message.reply_text("<i>The cats are sleeping.</i> 😴", parse_mode=ParseMode.HTML)
