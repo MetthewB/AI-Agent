@@ -1,40 +1,43 @@
-import asyncio
 import logging
-from huggingface_hub import AsyncInferenceClient
+import httpx
+from modules.config import GOOGLE_API_KEY
 
-# Import the token from your new config module
-from modules.config import HF_TOKEN
-
-# Set up logging for this module
 logger = logging.getLogger(__name__)
 
 # ==========================================
-# 1. INITIALIZE THE LLM CLIENT
-# ==========================================
-llm_client = AsyncInferenceClient(model="HuggingFaceH4/zephyr-7b-beta", token=HF_TOKEN)
-
-# ==========================================
-# 2. CORE INFERENCE FUNCTION
+# CORE INFERENCE FUNCTION (Google AI Studio)
 # ==========================================
 async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
-    """Sends a prompt to the HuggingFace LLM asynchronously with a strict timeout."""
-    try:
-        logger.info(f"🧠 Sending prompt to LLM (Limit: {max_tokens})...")
-        messages = [{"role": "user", "content": prompt}]
-        
-        # We use a 30-second timeout to prevent the bot from hanging if the API has a cold start
-        response = await asyncio.wait_for(
-            llm_client.chat_completion(messages=messages, max_tokens=max_tokens, temperature=0.7), 
-            timeout=30.0
-        )
-        
-        logger.info("✅ LLM response generated successfully.")
-        return response.choices[0].message.content
-        
-    except asyncio.TimeoutError:
-        logger.error("❌ LLM Error: Request timed out.")
-        return "<i>My AI brain took too long to think! The servers are busy, please try again.</i>"
-        
-    except Exception as e:
-        logger.error(f"❌ LLM Error: {e}")
-        return "<i>Sorry, my AI brain is a bit foggy right now.</i>"
+    """Sends a prompt to Google AI Studio (Gemma 4) asynchronously."""
+    
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemma-4-e2b-it:generateContent?key={GOOGLE_API_KEY}"
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {
+            "maxOutputTokens": max_tokens, 
+            "temperature": 0.7
+        }
+    }
+
+    logger.info(f"🧠 Sending prompt to Google AI Studio (Limit: {max_tokens})...")
+
+    async with httpx.AsyncClient() as client:
+        try:
+            res = await client.post(url, json=payload, timeout=30.0)
+            res.raise_for_status()
+            
+            logger.info("✅ LLM response generated successfully.")
+            
+            return res.json()['candidates'][0]['content']['parts'][0]['text']
+            
+        except httpx.TimeoutException:
+            logger.error("❌ LLM Error: Request timed out.")
+            return "<i>My AI brain took too long to think! The servers are busy, please try again.</i>"
+            
+        except httpx.HTTPStatusError as e:
+            logger.error(f"❌ Google API HTTP Error: {e.response.text}")
+            return "<i>Sorry, my AI brain hit a roadblock.</i>"
+            
+        except Exception as e:
+            logger.error(f"❌ General LLM Error: {e}")
+            return "<i>Sorry, my AI brain is a bit foggy right now.</i>"
