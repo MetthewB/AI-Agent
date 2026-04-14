@@ -369,13 +369,13 @@ def build_grocery_ui():
         if not docs:
             return "🛒 <b>The grocery list is currently empty!</b>", None
             
-        text = f"🛒 <b>Shared Shopping List ({len(docs)} items):</b>\n<i>Tap an item to cross it off!</i>"
+        text = f"🛒 <b>Shared Shopping List ({len(docs)} items):</b>\n<i>Tap an item to cross it off.</i>"
         
         keyboard = []
         for doc in docs:
             item_name = doc['item']
             item_id = str(doc['_id'])
-            keyboard.append([InlineKeyboardButton(f"❌ {item_name}", callback_data=f"g_rm_{item_id}")])
+            keyboard.append([InlineKeyboardButton(f"{item_name}", callback_data=f"g_rm_{item_id}")])
             
         keyboard.append([InlineKeyboardButton("🧹 Empty Entire List", callback_data="g_empty")])
         

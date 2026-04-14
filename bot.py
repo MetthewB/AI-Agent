@@ -13,7 +13,7 @@ from modules.commands import (
     recipe_command, train_command, stats_command, dateidea_command, cat_command, error_handler
 )
 
-from modules.voice_router import voice_handler
+from modules.intent_router import voice_handler, message_handler
 
 # ==========================================
 # HEALTH CHECK SERVER
@@ -72,6 +72,7 @@ def run_bot():
 
     # --- Voice Integration ---
     app.add_handler(MessageHandler(filters.VOICE, voice_handler))
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), message_handler))
     
     app.add_error_handler(error_handler)
     
