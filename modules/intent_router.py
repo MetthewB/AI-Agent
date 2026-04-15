@@ -1,4 +1,5 @@
 import re
+import html
 import json
 import asyncio
 import logging
@@ -151,18 +152,19 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif action == "chat":
         status_msg = await update.message.reply_text("<i>Thinking...</i>", parse_mode=ParseMode.HTML)
+        
         try:
             response = await ask_llm(user_text)
             
             if not response:
-                await status_msg.edit_text("⚠️ <i>The AI didn't return an answer. Is the API down?</i>", parse_mode=ParseMode.HTML)
+                await status_msg.edit_text("⚠️ The AI didn't return an answer. Is the API down?")
             else:
                 clean_response = response.replace("*", "").replace("#", "")
-                await status_msg.edit_text(clean_response, parse_mode=ParseMode.HTML)
+                await status_msg.edit_text(clean_response)
                 
         except Exception as e:
             logger.error(f"❌ General Chat Error: {e}")
-            await status_msg.edit_text(f"❌ <i>My brain is foggy: {str(e)}</i>", parse_mode=ParseMode.HTML)
+            await status_msg.edit_text(f"❌ My brain is foggy: {str(e)}")
 
 
 # ==========================================
@@ -200,7 +202,12 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await status_msg.edit_text("⚠️ <i>I couldn't hear anything clearly. Could you speak up?</i>", parse_mode=ParseMode.HTML)
             return
 
-        await status_msg.edit_text(f"🗣️ <b>You said:</b> <i>\"{transcription}\"</i>\n🧠 <i>Routing commands...</i>", parse_mode=ParseMode.HTML)
+        safe_transcription = html.escape(transcription)
+        await status_msg.edit_text(
+            f"🗣️ <b>You said:</b> <i>\"{safe_transcription}\"</i>\n"
+            f"🧠 <i>Routing commands...</i>", 
+            parse_mode=ParseMode.HTML
+        )
 
         # 3. Route intent using the LLM (Voice can trigger MULTIPLE commands!)
         prompt = f"""
@@ -248,8 +255,12 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return
 
         if not commands_to_run:
-            await status_msg.edit_text(f"🗣️ <b>You said:</b> <i>\"{transcription}\"</i>\n💬 I heard you, but I didn't detect any specific commands to run!", parse_mode=ParseMode.HTML)
-            return
+            safe_transcription = html.escape(transcription)
+            await status_msg.edit_text(
+                f"🗣️ <b>You said:</b> <i>\"{safe_transcription}\"</i>\n"
+                f"💬 I heard you, but I didn't detect any specific commands to run!", 
+                parse_mode=ParseMode.HTML
+            )
 
         await status_msg.delete()
         

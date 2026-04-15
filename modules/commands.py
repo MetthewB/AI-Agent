@@ -1,4 +1,5 @@
 import re
+import html
 import time
 import random
 import difflib
@@ -112,6 +113,7 @@ async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     for ticker, name in PORTFOLIO_MAP.items():
         try:
+            safe_name = html.escape(name)
             stock = yf.Ticker(ticker)
             data = await asyncio.to_thread(stock.history, period="5d")
             
@@ -121,12 +123,12 @@ async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 pct = ((current - prev) / prev) * 100
                 
                 indicator = "🟢" if pct >= 0 else "🔴"
-                stats.append(f"• <b>{name}</b>:\n  <code>{indicator} {current:.2f} ({pct:+.2f}%)</code>")
+                stats.append(f"• <b>{safe_name}</b>:\n  <code>{indicator} {current:.2f} ({pct:+.2f}%)</code>")
             else:
-                stats.append(f"• <b>{name}</b>:\n  <code>⚠️ Market closed</code>")
+                stats.append(f"• <b>{safe_name}</b>:\n  <code>⚠️ Market closed</code>")
         except Exception as e:
             logger.error(f"❌ Portfolio Error for {ticker}: {e}")
-            stats.append(f"• <b>{name}</b>:\n  <code>⚠️ Fetch failed</code>")
+            stats.append(f"• <b>{html.escape(name)}</b>:\n  <code>⚠️ Fetch failed</code>")
     
     header = "📊 <b>Live Market Portfolio</b>\n━━━━━━━━━━━━━━━━━━━\n"
     body = "\n".join(stats)
@@ -174,10 +176,11 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         prompt += get_lang_rule(context)
         summary = await ask_llm(prompt)
-        await status_msg.edit_text(f"📰 <b>Geopolitical Briefing</b>\n\n{summary.replace('*', '')}", parse_mode=ParseMode.HTML)
+        safe_summary = html.escape(summary.replace('*', ''))
+        await status_msg.edit_text(f"📰 <b>Geopolitical Briefing</b>\n\n{safe_summary}", parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"❌ News Error: {e}")
-        await status_msg.edit_text("⚠️ <i>News summary failed. Try /portfolio instead?</i>", parse_mode=ParseMode.HTML)
+        await status_msg.edit_text(f"⚠️ News summary failed: {str(e)}")
 
 
 # ==========================================
@@ -192,8 +195,8 @@ async def research_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⚠️ <b>Please provide a topic!</b>\n<i>Example: /research Swiss neutrality 2026</i>", parse_mode=ParseMode.HTML)
         return
 
-    status_msg = await update.message.reply_text(f"🔍 <i>Researching '{query}'...</i>", parse_mode=ParseMode.HTML)
-    
+    status_msg = await update.message.reply_text(f"🔍 <i>Researching '{html.escape(query)}'...</i>", parse_mode=ParseMode.HTML)
+
     try:
         search_url = f"https://news.google.com/rss/search?q={query}&hl=en-US&gl=US&ceid=US:en"
         res = await asyncio.to_thread(requests.get, search_url, timeout=10)
@@ -245,22 +248,22 @@ async def research_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
         prompt += get_lang_rule(context)
         analysis = await ask_llm(prompt)
-        await status_msg.edit_text(f"📝 <b>Research Summary: {query}</b>\n\n{analysis.replace('*', '')}", parse_mode=ParseMode.HTML)
+        safe_analysis = html.escape(analysis.replace('*', ''))
+        safe_query = html.escape(query)
+        await status_msg.edit_text(f"📝 <b>Research Summary: {safe_query}</b>\n\n{safe_analysis}", parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"❌ Research error: {e}")
-        await status_msg.edit_text("⚠️ <i>Research failed. My brain is a bit tired.</i>", parse_mode=ParseMode.HTML)
+        await status_msg.edit_text(f"⚠️ Research failed: {str(e)}")
 
 async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     logger.info(f"▶️ User {update.effective_chat.id} triggered /weather")
     
-    # Default to Lausanne if no city is provided
     city_query = " ".join(context.args) or "Lausanne"
-    display_name = city_query.title()
+    display_name = html.escape(city_query.title())
     
     status_msg = await update.message.reply_text(f"<i>Looking up the weather for {display_name}...</i> 🌍", parse_mode=ParseMode.HTML)
     
-    # wttr.in handles both location search and weather in one single URL
     weather_url = f"https://wttr.in/{city_query}?format=j1"
     headers = {"User-Agent": "MattouBot/1.0 (Telegram Assistant)"}
     
@@ -305,16 +308,18 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         prompt += get_lang_rule(context)
         forecast = await ask_llm(prompt, max_tokens=200)
-        await status_msg.edit_text(f"🌍 <b>Forecast for {display_name}</b>\n\n{forecast}", parse_mode=ParseMode.HTML)
+        safe_forecast = html.escape(forecast.replace('*', ''))
+        await status_msg.edit_text(f"🌍 <b>Forecast for {display_name}</b>\n\n{safe_forecast}", parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"❌ Weather Command Error: {e}")
-        await status_msg.edit_text("⚠️ <i>Weather data unavailable. Check the window!</i> 🪟", parse_mode=ParseMode.HTML)
+        await status_msg.edit_text(f"⚠️ Weather data unavailable: {str(e)}")
 
 async def remind_callback(context: ContextTypes.DEFAULT_TYPE):
     job = context.job
+    safe_message = html.escape(job.data)
     await context.bot.send_message(
         chat_id=job.chat_id, 
-        text=f"🔔 <b>REMINDER:</b> {job.data}", 
+        text=f"🔔 <b>REMINDER:</b> {safe_message}", 
         parse_mode=ParseMode.HTML
     )
 
@@ -348,8 +353,9 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 time_display = f"{mins} minute(s)"
         
-        await update.message.reply_text(f"🕒 Got it! I will remind you to <b>{message}</b> in {time_display}.", parse_mode=ParseMode.HTML)
-    except (IndexError, ValueError):
+        safe_message = html.escape(message)
+        await update.message.reply_text(f"🕒 Got it! I will remind you to <b>{safe_message}</b> in {time_display}.", parse_mode=ParseMode.HTML)
+    except (IndexError, ValueError) as e:
         error_msg = (
             "⚠️ <b>Usage:</b> /remind [time] [message]\n\n"
             "<i>Examples:</i>\n"
@@ -378,7 +384,8 @@ def build_grocery_ui():
         for doc in docs:
             item_name = doc['item']
             item_id = str(doc['_id'])
-            keyboard.append([InlineKeyboardButton(f"{item_name}", callback_data=f"g_rm_{item_id}")])
+            safe_item = html.escape(item_name)
+            keyboard.append([InlineKeyboardButton(f"{safe_item}", callback_data=f"g_rm_{item_id}")])
             
         keyboard.append([InlineKeyboardButton("🧹 Empty Entire List", callback_data="g_empty")])
         
@@ -400,7 +407,8 @@ async def grocery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         grocery_collection.insert_one({"item": item})
         text, reply_markup = build_grocery_ui()
-        await update.message.reply_text(f"✅ Added <b>{item}</b>!\n\n{text}", reply_markup=reply_markup, parse_mode=ParseMode.HTML)
+        safe_item = html.escape(item)
+        await update.message.reply_text(f"✅ Added <b>{safe_item}</b>!\n\n{text}", reply_markup=reply_markup, parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"❌ Grocery Add Error: {e}")
         await update.message.reply_text("⚠️ <i>Failed to add the item. The cart is stuck!</i>", parse_mode=ParseMode.HTML)
@@ -423,9 +431,8 @@ async def grocery_callback_handler(update: Update, context: ContextTypes.DEFAULT
             grocery_collection.delete_many({})
             
         text, reply_markup = build_grocery_ui()
-        
-        await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-        
+        await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)  
+      
     except Exception as e:
         logger.error(f"❌ Grocery Callback Error: {e}")
         pass
@@ -442,7 +449,7 @@ async def grocery_remove_command(update: Update, context: ContextTypes.DEFAULT_T
         
         if best_match:
             grocery_collection.delete_one({"item": best_match})
-            await update.message.reply_text(f"✅ Removed <b>{best_match}</b>!", parse_mode=ParseMode.HTML)
+            await update.message.reply_text(f"✅ Removed <b>{html.escape(best_match)}</b>!", parse_mode=ParseMode.HTML)
     except Exception: pass
 
 async def grocery_empty_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -471,7 +478,8 @@ async def decide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await status_msg.edit_text("🎲 <i>Running the algorithms...</i>", parse_mode=ParseMode.HTML)
     await asyncio.sleep(1.2)
     
-    await status_msg.edit_text(f"🎯 <b>Decision Made:</b>\n\nI have spoken. You are going with: <b>{choice}</b>", parse_mode=ParseMode.HTML)
+    safe_choice = html.escape(choice)
+    await status_msg.edit_text(f"🎯 <b>Decision Made:</b>\n\nI have spoken. You are going with: <b>{safe_choice}</b>", parse_mode=ParseMode.HTML)
 
 async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
@@ -527,14 +535,10 @@ async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     try:
-        await status_msg.edit_text(recipe_output, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+        await status_msg.edit_text(f"👨‍🍳 RECIPE FOUND:\n\n{recipe_output}", reply_markup=reply_markup)
     except Exception as e:
-        logger.error(f"❌ HTML Parsing Error in Recipe: {e}")
-        await status_msg.edit_text(
-            f"👨‍🍳 <b>Here is your recipe!</b> (<i>HTML formatting disabled due to an AI glitch</i>):\n\n{recipe_output}", 
-            parse_mode=None,
-            reply_markup=reply_markup
-        )
+        logger.error(f"❌ Recipe Display Error: {e}")
+        await status_msg.edit_text(f"Recipe output:\n\n{recipe_output}", reply_markup=reply_markup)
 
 
 # ==========================================
@@ -602,13 +606,10 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt += get_lang_rule(context)
     workout = await ask_llm(prompt)
     try:
-        await status_msg.edit_text(workout, parse_mode=ParseMode.HTML)
+        await status_msg.edit_text(f"🏃‍♂️ WORKOUT PLAN:\n\n{workout}")
     except Exception as e:
-        logger.error(f"❌ HTML Parsing Error in Train: {e}")
-        await status_msg.edit_text(
-            f"🏃‍♂️ <b>Here is your workout!</b> (<i>Formatting disabled due to AI glitch</i>):\n\n{workout}", 
-            parse_mode=None
-        )
+        logger.error(f"❌ Train Display Error: {e}")
+        await status_msg.edit_text(workout)
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
@@ -716,21 +717,13 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         prompt += get_lang_rule(context)
         ai_review = await ask_llm(prompt)
+        safe_review = html.escape(ai_review)
+        final_message = f"📊 <b>7-Day Performance Review</b>\n\n{stats_text}\n\n<b>Coach's Note:</b>\n{safe_review}"
+        await status_msg.edit_text(final_message, parse_mode=ParseMode.HTML)
         
-        final_message = f"📊 <b>7-Day Performance Review</b>\n\n{stats_text}\n\n<b>Coach's Note:</b>\n{ai_review}"
-        
-        try:
-            await status_msg.edit_text(final_message, parse_mode=ParseMode.HTML)
-        except Exception as e:
-            logger.error(f"❌ HTML Parsing Error in Stats: {e}")
-            await status_msg.edit_text(
-                f"📊 <b>7-Day Performance Review</b> (<i>Formatting disabled due to AI glitch</i>):\n\n{stats_text}\n\nCoach's Note:\n{ai_review}", 
-                parse_mode=None
-            )
-            
     except Exception as e:
-        logger.error(f"❌ Stats Fetch Error: {e}")
-        await status_msg.edit_text("⚠️ <i>Failed to fetch your weekly stats. Check the logs!</i>", parse_mode=ParseMode.HTML)
+            logger.error(f"❌ Stats Logic/Display Error: {e}")
+            await status_msg.edit_text(f"⚠️ Stats summary failed: {str(e)}")
 
 
 # ==========================================
@@ -750,7 +743,8 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['last_dateidea'] = location_query
         
     display_location = location_query.title()
-    status_msg = await update.effective_message.reply_text("<i>Checking the weather and thinking of something romantic...</i> 🍷", parse_mode=ParseMode.HTML)
+    safe_display = html.escape(location_query.title())
+    status_msg = await update.effective_message.reply_text(f"<i>Thinking of something romantic in {safe_display}...</i> 🍷", parse_mode=ParseMode.HTML)
     current_date = datetime.datetime.now().strftime("%A, %B %d, %Y")
     
     weather_condition = "Unknown"
@@ -802,7 +796,7 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("🔄 Re-roll", callback_data="reroll_dateidea")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await status_msg.edit_text(idea, parse_mode=ParseMode.HTML, reply_markup=reply_markup)
+    await status_msg.edit_text(f"✨ {idea}", reply_markup=reply_markup)
 
 
 async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -832,7 +826,7 @@ async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_message.reply_animation(data[0]['url'], reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"❌ Cat API error: {e}")
-        await update.effective_message.reply_text("<i>The cats are sleeping.</i> 😴", parse_mode=ParseMode.HTML)
+        await update.effective_message.reply_text("The cats are sleeping. 😴")
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log the error and send a telegram message to notify the developer."""

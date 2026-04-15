@@ -22,7 +22,7 @@ async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
     }
 
     max_retries = 3
-    base_delay = 2.0
+    base_delay = 5.0
 
     async with httpx.AsyncClient() as client:
         for attempt in range(max_retries):
