@@ -845,7 +845,14 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['last_movie'] = keywords
         
     if not keywords:
-        await update.effective_message.reply_text("⚠️ <b>Usage:</b> /movie [vibe/genre/actors]\n<i>Example: /movie scary with dogs but a happy ending</i>", parse_mode=ParseMode.HTML)
+        usage_text = (
+            "⚠️ <b>Usage:</b> /movie [vibe/genre/actors]\n"
+            "<i>Examples:</i>\n"
+            "• <code>/movie scary with dogs but a happy ending</code>\n"
+            "• <code>/movie film d'animation avec un chat</code>\n"
+            "• <code>/movie mind-bending sci-fi</code>"
+        )
+        await update.effective_message.reply_text(usage_text, parse_mode=ParseMode.HTML)
         return
 
     safe_keywords = html.escape(keywords)
@@ -867,14 +874,13 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     3. WHERE TO WATCH: Guess the most likely streaming service (Netflix, Prime, Apple) or say "Rent it."
     4. PLAIN TEXT ONLY: Absolutely NO HTML tags.
     5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). 
-    6. ANTI-PANIC: Do NOT output any language warnings. Respond in the language of the prompt.
+    6. LANGUAGE SYNC: You MUST reply entirely in the language the user used. If they wrote in French, translate the template labels (e.g., use "Genre :", "Le Pitch :").
 
     [OUTPUT FORMAT EXAMPLE]
     THE MATRIX (1999)
     Genre: Sci-Fi / Action
     
     The Pitch: A hacker discovers reality is a simulation and learns kung fu to fight robot overlords.
-    🍿 Likely on: Netflix
     """
     
     prompt += get_lang_rule(context)
@@ -935,14 +941,13 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     3. WHERE TO LISTEN: Mention where they can blast this (Spotify, Apple Music, YouTube).
     4. PLAIN TEXT ONLY: Absolutely NO HTML tags.
     5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). 
-    6. ANTI-PANIC: Do NOT output any language warnings. Respond in the language of the prompt.
+    6. LANGUAGE SYNC: You MUST reply entirely in the language the user used. If they wrote in French, translate the template labels (e.g., use "Genre :", "L'Ambiance :").
 
     [OUTPUT FORMAT EXAMPLE]
-    RUMOURS by FLEETWOOD MAC
+    Rumours by Fleetwood Mac
     Genre: Classic Rock / Pop
     
     The Vibe: The ultimate breakup album that somehow makes cooking pasta feel like a dramatic, passionate affair.
-    🎧 Fire it up on: Spotify
     """
     
     prompt += get_lang_rule(context)
@@ -975,7 +980,7 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚠️ <b>Usage:</b> /book [genre/vibe/topic]\n"
             "<i>Examples:</i>\n"
             "• <code>/book sci-fi with philosophical themes</code>\n"
-            "• <code>/book a cozy mystery set in winter</code>\n"
+            "• <code>/book livre de philosophie</code>\n"
             "• <code>/book something to make me smarter about money</code>"
         )
         await update.effective_message.reply_text(usage_text, parse_mode=ParseMode.HTML)
@@ -1002,7 +1007,7 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     2. THE "WHY": Explain exactly why this book fits their vibe in one sassy, engaging sentence.
     3. PLAIN TEXT ONLY: Absolutely NO HTML tags.
     4. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#).
-    5. ANTI-PANIC: Do NOT output any language warnings. Respond in the language of the prompt.
+    5. LANGUAGE SYNC: You MUST reply entirely in the language the user used. If they wrote in French, translate the template labels (e.g., use "Genre :", "Le Pitch :").
 
     [OUTPUT FORMAT EXAMPLE]
     DUNE by FRANK HERBERT (1965)
@@ -1022,7 +1027,3 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"❌ Book Display Error: {e}")
         await status_msg.edit_text(f"⚠️ Book suggestion failed: {str(e)}")
-
-async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Log the error and send a telegram message to notify the developer."""
-    logger.error(f"❌ Telegram API Error: {context.error}")
