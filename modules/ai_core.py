@@ -19,7 +19,7 @@ async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
     }
     
     payload = {
-        "model": "qwen/qwen-2.5-72b-instruct:free", 
+        "model": "openrouter/free", 
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "temperature": 0.7
