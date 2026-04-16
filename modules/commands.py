@@ -855,31 +855,42 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     safe_keywords = html.escape(keywords)
-    status_msg = await update.effective_message.reply_text(f"🍿 <i>Recherche de '{safe_keywords}'...</i>", parse_mode=ParseMode.HTML)
+    status_msg = await update.effective_message.reply_text(
+        f"🍿 <i>Searching for / Recherche de '{safe_keywords}'...</i>", 
+        parse_mode=ParseMode.HTML
+    )
     
     prompt = f"""
     [ROLE]
-    Tu es un Sommelier du Cinéma d'élite (Films & Séries).
+    You are an elite Media Sommelier (Movies & Series).
 
     [CONTEXT]
-    Requête : "{keywords}"
+    User Request: "{keywords}"
     
     [TASK]
-    Suggère UN SEUL film ou UNE SEULE série basé sur la requête.
+    Suggest ONE perfect movie or series based on the request.
 
     [STRICT INSTRUCTIONS]
-    1. LANGUE : Réponds EXCLUSIVEMENT en français.
-    2. TYPE : Propose un film ou une série selon la demande.
-    3. CONTENU : Donne le titre, l'année, le genre et un résumé de 1-2 phrases expliquant pourquoi ce choix correspond aux mots-clés.
-    4. STYLE : Pas de majuscules inutiles, pas de Markdown (pas d'astérisques), texte brut uniquement.
+    1. LANGUAGE: Detect the language of the User Request. 
+       - If the request is in French, respond EXCLUSIVELY in French.
+       - If the request is in English, respond EXCLUSIVELY in English.
+       - If ambiguous, default to French.
+    2. MEDIA TYPE: Provide a movie, TV show, or series based on the user's intent.
+    3. LABELS: Translate the labels (Genre, Pitch/Summary) to match the chosen language.
+    4. STYLE: No all-caps, no Markdown (no asterisks). Plain text only.
+    5. NO WARNINGS: Do not output any meta-comments about your language capabilities.
 
-    [STRUCTURE DE SORTIE - EXEMPLE]
+    [OUTPUT STRUCTURE EXAMPLE - ENGLISH]
+    The Matrix (1999)
+    Genre: Sci-Fi / Action
+    The Pitch: A hacker discovers reality is a simulation and learns kung fu to fight robot overlords.
+
+    [STRUCTURE DE SORTIE EXEMPLE - FRANÇAIS]
     Le Parrain (1972)
     Genre : Crime / Drame
     Résumé : Une saga épique sur une famille mafieuse à New York, explorant les thèmes de la loyauté et du pouvoir.
     """
     
-    prompt += get_lang_rule(context)
     suggestion = await ask_llm(prompt) 
     
     keyboard = [[InlineKeyboardButton("🔄 Re-roll", callback_data="reroll_movie")]]
@@ -909,40 +920,47 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚠️ <b>Usage:</b> /music [genre/vibe/activity]\n"
             "<i>Examples:</i>\n"
             "• <code>/music alternative rock</code>\n"
-            "• <code>/music playlist de musculation</code>\n"
-            "• <code>/music cooking pasta with wine</code>"
+            "• <code>/music playlist de musculation</code>"
         )
         await update.effective_message.reply_text(usage_text, parse_mode=ParseMode.HTML)
         return
 
     safe_keywords = html.escape(keywords)
-    status_msg = await update.effective_message.reply_text(
-        f"🎧 <i>Recherche de '{safe_keywords}'...</i>", 
-        parse_mode=ParseMode.HTML
-    )
+    
+    status_text = f"🎧 <i>Searching for / Recherche de '{safe_keywords}'...</i>"
+    status_msg = await update.effective_message.reply_text(status_text, parse_mode=ParseMode.HTML)
     
     prompt = f"""
     [ROLE]
-    Tu es un DJ et Curateur Musical d'élite.
+    You are an elite, highly opinionated DJ and Music Curator.
 
     [CONTEXT]
-    Ambiance recherchée : "{keywords}"
+    User Request: "{keywords}"
     
     [TASK]
-    Suggère UNE SEULE chanson, UN SEUL album ou UN concept de playlist.
+    Suggest ONE perfect song, album, or playlist concept.
 
     [STRICT INSTRUCTIONS]
-    1. LANGUE : Réponds EXCLUSIVEMENT en français.
-    2. QUALITÉ : Choisis quelque chose de vraiment excellent, évite les clichés trop évidents.
-    3. STYLE : Pas de majuscules inutiles, pas de Markdown, texte brut uniquement.
+    1. LANGUAGE: Detect the language of the User Request. 
+       - If the request is in French, respond EXCLUSIVELY in French.
+       - If the request is in English, respond EXCLUSIVELY in English.
+       - If ambiguous (like "Rock"), default to French.
+    2. LABELS: Translate the labels (Genre, Vibe) to match the chosen language.
+    3. NO ALL CAPS: Use standard Title Case for names.
+    4. NO MARKDOWN: No asterisks, no hashtags. Plain text only.
+    5. NO WARNINGS: Do not output any meta-comments or language warnings. Just the recommendation.
 
-    [STRUCTURE DE SORTIE - EXEMPLE]
-    Random Access Memories de DAFT PUNK
-    Genre : Electronic / Funk
-    L'Ambiance : Un album magistral qui mélange sons futuristes et nostalgie disco, parfait pour cette énergie.
+    [OUTPUT STRUCTURE EXAMPLE - ENGLISH]
+    Random Access Memories by Daft Punk
+    Genre: Electronic / Funk
+    The Vibe: A masterpiece blending futuristic sounds with disco nostalgia.
+
+    [STRUCTURE DE SORTIE EXEMPLE - FRANÇAIS]
+    Random Access Memories de Daft Punk
+    Genre : Électronique / Funk
+    L'Ambiance : Un chef-d'œuvre mêlant sonorités futuristes et nostalgie disco.
     """
     
-    prompt += get_lang_rule(context)
     suggestion = await ask_llm(prompt) 
     
     keyboard = [[InlineKeyboardButton("🔄 Spin another track", callback_data="reroll_music")]]
@@ -972,40 +990,48 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚠️ <b>Usage:</b> /book [genre/vibe/topic]\n"
             "<i>Examples:</i>\n"
             "• <code>/book sci-fi with philosophical themes</code>\n"
-            "• <code>/book livre de philosophie</code>\n"
-            "• <code>/book something to make me smarter about money</code>"
+            "• <code>/book livre de philosophie</code>"
         )
         await update.effective_message.reply_text(usage_text, parse_mode=ParseMode.HTML)
         return
 
     safe_keywords = html.escape(keywords)
     status_msg = await update.effective_message.reply_text(
-        f"📚 <i>Recherche de '{safe_keywords}'...</i>", 
+        f"📚 <i>Searching for / Recherche de '{safe_keywords}'...</i>", 
         parse_mode=ParseMode.HTML
     )
     
     prompt = f"""
     [ROLE]
-    Tu es un Conservateur Littéraire et Bibliothécaire d'élite.
+    You are an elite, highly opinionated Literary Curator and Librarian.
 
     [CONTEXT]
-    Vibe recherchée : "{keywords}"
+    User Request: "{keywords}"
     
     [TASK]
-    Suggère UN SEUL livre (fiction ou non-fiction).
+    Suggest ONE perfect book (fiction or non-fiction).
 
     [STRICT INSTRUCTIONS]
-    1. LANGUE : Réponds EXCLUSIVEMENT en français.
-    2. QUALITÉ : Évite les classiques scolaires ennuyeux, propose une lecture captivante.
-    3. STYLE : Pas de majuscules inutiles, pas de Markdown, texte brut uniquement.
+    1. LANGUAGE: Detect the language of the User Request. 
+       - If the request is in French, respond EXCLUSIVELY in French.
+       - If the request is in English, respond EXCLUSIVELY in English.
+       - If ambiguous, default to French.
+    2. NO TRANSLATION: Do not translate the user's intent to English. Process it in its original language.
+    3. LABELS: Translate the labels (Genre, Pitch/Summary) to match the chosen language.
+    4. STYLE: No all-caps, no Markdown (no asterisks). Plain text only.
+    5. NO WARNINGS: Do not output meta-comments or language restrictions. Just the recommendation.
 
-    [STRUCTURE DE SORTIE - EXEMPLE]
-    L'Étranger par ALBERT CAMUS (1942)
+    [OUTPUT STRUCTURE EXAMPLE - ENGLISH]
+    Project Hail Mary by Andy Weir (2021)
+    Genre: Science Fiction
+    The Pitch: A lone astronaut must save humanity using science and a very unexpected new friend.
+
+    [STRUCTURE DE SORTIE EXEMPLE - FRANÇAIS]
+    L'Étranger par Albert Camus (1942)
     Genre : Philosophie / Roman
     Le Pitch : Un homme indifférent au monde se retrouve impliqué dans un meurtre absurde sur une plage algérienne.
     """
     
-    prompt += get_lang_rule(context)
     suggestion = await ask_llm(prompt) 
     
     keyboard = [[InlineKeyboardButton("🔄 Turn the page", callback_data="reroll_book")]]
