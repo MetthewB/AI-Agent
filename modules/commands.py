@@ -859,26 +859,24 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     prompt = f"""
     [ROLE]
-    You are an elite Film Sommelier. 
+    Tu es un Sommelier du Cinéma d'élite (Films & Séries).
 
     [CONTEXT]
-    The user request is: "{keywords}"
+    Requête : "{keywords}"
     
     [TASK]
-    Suggest ONE perfect movie based on the request.
+    Suggère UN SEUL film ou UNE SEULE série basé sur la requête.
 
     [STRICT INSTRUCTIONS]
-    1. LANGUAGE: You MUST respond in the EXACT same language as the user request. If the request is in French, every single word of your response must be in French.
-    2. NO TRANSLATION: Do not translate the user's intent to English. Process it in the original language.
-    3. MOVIES ONLY: Suggest a feature film, or TV shows, or series, depending on what is asked.
-    4. NO ALL CAPS: Write the title in standard title case (e.g., "Inception", not "INCEPTION").
-    5. FORMAT: Use the structure below but TRANSLATE the labels (Genre, Pitch) into the user's language.
-    6. PLAIN TEXT ONLY: No HTML, no Markdown (no asterisks).
+    1. LANGUE : Réponds EXCLUSIVEMENT en français.
+    2. TYPE : Propose un film ou une série selon la demande.
+    3. CONTENU : Donne le titre, l'année, le genre et un résumé de 1-2 phrases expliquant pourquoi ce choix correspond aux mots-clés.
+    4. STYLE : Pas de majuscules inutiles, pas de Markdown (pas d'astérisques), texte brut uniquement.
 
-    [STRUCTURE]
-    Title (Year)
-    [Translated Label for Genre]: [Value]
-    [Translated Label for Pitch/Summary]: [1-2 sentences]
+    [STRUCTURE DE SORTIE - EXEMPLE]
+    Le Parrain (1972)
+    Genre : Crime / Drame
+    Résumé : Une saga épique sur une famille mafieuse à New York, explorant les thèmes de la loyauté et du pouvoir.
     """
     
     prompt += get_lang_rule(context)
@@ -919,32 +917,29 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     safe_keywords = html.escape(keywords)
     status_msg = await update.effective_message.reply_text(
-        f"🎧 <i>Putting on my headphones and crate-digging for '{safe_keywords}'...</i>", 
+        f"🎧 <i>Recherche de '{safe_keywords}'...</i>", 
         parse_mode=ParseMode.HTML
     )
     
     prompt = f"""
     [ROLE]
-    You are an elite, highly opinionated DJ and Music Curator. 
+    Tu es un DJ et Curateur Musical d'élite.
 
     [CONTEXT]
-    The user wants a music recommendation based on these vibes: "{keywords}"
+    Ambiance recherchée : "{keywords}"
     
     [TASK]
-    Suggest ONE perfect song, album, or specific playlist concept.
+    Suggère UNE SEULE chanson, UN SEUL album ou UN concept de playlist.
 
     [STRICT INSTRUCTIONS]
-    1. LANGUAGE: You MUST respond in the EXACT same language as the user request. If French, every word must be in French.
-    2. NO TRANSLATION: Process the intent in its original language. Do not convert to English first.
-    3. QUALITY: Pick something genuinely great. Avoid the most obvious top-40 clichés.
-    4. NO ALL CAPS: Use standard Title Case for the title and artist.
-    5. LABELS: Translate the labels "Genre" and "Pitch" into the user's language (e.g., in French use "Genre" and "L'Ambiance").
-    6. PLAIN TEXT ONLY: Absolutely NO HTML tags or Markdown (no asterisks).
+    1. LANGUE : Réponds EXCLUSIVEMENT en français.
+    2. QUALITÉ : Choisis quelque chose de vraiment excellent, évite les clichés trop évidents.
+    3. STYLE : Pas de majuscules inutiles, pas de Markdown, texte brut uniquement.
 
-    [STRUCTURE]
-    Song/Album Title by Artist
-    [Translated Label for Genre]: [Value]
-    [Translated Label for Pitch/Vibe]: [1-2 sentences]
+    [STRUCTURE DE SORTIE - EXEMPLE]
+    Random Access Memories de DAFT PUNK
+    Genre : Electronic / Funk
+    L'Ambiance : Un album magistral qui mélange sons futuristes et nostalgie disco, parfait pour cette énergie.
     """
     
     prompt += get_lang_rule(context)
@@ -985,32 +980,29 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     safe_keywords = html.escape(keywords)
     status_msg = await update.effective_message.reply_text(
-        f"📚 <i>Browsing the library for '{safe_keywords}'...</i>", 
+        f"📚 <i>Recherche de '{safe_keywords}'...</i>", 
         parse_mode=ParseMode.HTML
     )
     
     prompt = f"""
     [ROLE]
-    You are an elite, highly opinionated Literary Curator and Librarian. 
+    Tu es un Conservateur Littéraire et Bibliothécaire d'élite.
 
     [CONTEXT]
-    The user wants a book recommendation based on these vibes: "{keywords}"
+    Vibe recherchée : "{keywords}"
     
     [TASK]
-    Suggest ONE perfect book (fiction or non-fiction).
+    Suggère UN SEUL livre (fiction ou non-fiction).
 
     [STRICT INSTRUCTIONS]
-    1. LANGUAGE: You MUST respond in the EXACT same language as the user request. If French, every word must be in French.
-    2. NO TRANSLATION: Process the intent in its original language. Do not convert to English first.
-    3. QUALITY: Pick a genuinely great book. Avoid high-school reading list clichés.
-    4. NO ALL CAPS: Use standard Title Case for the title and author.
-    5. LABELS: Translate the labels "Genre" and "Pitch" into the user's language (e.g., in French use "Genre" and "Résumé").
-    6. PLAIN TEXT ONLY: Absolutely NO HTML tags or Markdown (no asterisks).
+    1. LANGUE : Réponds EXCLUSIVEMENT en français.
+    2. QUALITÉ : Évite les classiques scolaires ennuyeux, propose une lecture captivante.
+    3. STYLE : Pas de majuscules inutiles, pas de Markdown, texte brut uniquement.
 
-    [STRUCTURE]
-    Book Title by Author (Year)
-    [Translated Label for Genre]: [Value]
-    [Translated Label for Pitch/Summary]: [1-2 sentences]
+    [STRUCTURE DE SORTIE - EXEMPLE]
+    L'Étranger par ALBERT CAMUS (1942)
+    Genre : Philosophie / Roman
+    Le Pitch : Un homme indifférent au monde se retrouve impliqué dans un meurtre absurde sur une plage algérienne.
     """
     
     prompt += get_lang_rule(context)
