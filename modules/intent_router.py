@@ -117,15 +117,15 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await grocery_command(update, context)
 
     elif action == "movie":
-        context.args = []
+        context.args = data.split()
         await movie_command(update, context)
 
     elif action == "music":
-        context.args = []
+        context.args = data.split()
         await music_command(update, context)
 
     elif action == "book":
-        context.args = []
+        context.args = data.split()
         await book_command(update, context)
         
     elif action == "weather":

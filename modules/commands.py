@@ -834,13 +834,22 @@ async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
     
-    keywords = " ".join(context.args)
+    query = update.callback_query
+    if query:
+        await query.answer()
+        logger.info(f"▶️ User {update.effective_chat.id} triggered re-roll for /movie")
+        keywords = context.user_data.get('last_movie', 'a great movie')
+    else:
+        logger.info(f"▶️ User {update.effective_chat.id} triggered /movie")
+        keywords = " ".join(context.args)
+        context.user_data['last_movie'] = keywords
+        
     if not keywords:
-        await update.message.reply_text("⚠️ <b>Usage:</b> /movie [vibe/genre/actors]\n<i>Example: /movie scary with dogs but a happy ending</i>", parse_mode=ParseMode.HTML)
+        await update.effective_message.reply_text("⚠️ <b>Usage:</b> /movie [vibe/genre/actors]\n<i>Example: /movie scary with dogs but a happy ending</i>", parse_mode=ParseMode.HTML)
         return
 
     safe_keywords = html.escape(keywords)
-    status_msg = await update.message.reply_text(f"🍿 <i>Dimming the lights and searching for '{safe_keywords}'...</i>", parse_mode=ParseMode.HTML)
+    status_msg = await update.effective_message.reply_text(f"🍿 <i>Dimming the lights and searching for '{safe_keywords}'...</i>", parse_mode=ParseMode.HTML)
     
     prompt = f"""
     [ROLE]
@@ -857,15 +866,15 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     2. THE "WHY": Explain exactly why it fits their weird/specific keywords in one sassy sentence.
     3. WHERE TO WATCH: Guess the most likely streaming service (Netflix, Prime, Apple) or say "Rent it."
     4. PLAIN TEXT ONLY: Absolutely NO HTML tags.
-    5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). Use ALL CAPS for the title.
-    6. EMOJIS: Exactly 2 emojis total.
+    5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). 
+    6. ANTI-PANIC: Do NOT output any language warnings. Respond in the language of the prompt.
 
-    [OUTPUT STRUCTURE]
-    [MOVIE TITLE IN ALL CAPS] ([Year])
-    Genre: [Genre]
+    [OUTPUT FORMAT EXAMPLE]
+    THE MATRIX (1999)
+    Genre: Sci-Fi / Action
     
-    The Pitch: [Your 1-2 sentence pitch]
-    🍿 Likely on: [Streaming Service]
+    The Pitch: A hacker discovers reality is a simulation and learns kung fu to fight robot overlords.
+    🍿 Likely on: Netflix
     """
     
     prompt += get_lang_rule(context)
@@ -874,7 +883,11 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     keyboard = [[InlineKeyboardButton("🔄 Re-roll", callback_data="reroll_movie")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await status_msg.edit_text(suggestion, reply_markup=reply_markup)
+    try:
+        await status_msg.edit_text(suggestion, reply_markup=reply_markup)
+    except Exception as e:
+        logger.error(f"❌ Movie Display Error: {e}")
+        await status_msg.edit_text(f"⚠️ Movie suggestion failed: {str(e)}")
 
 async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
@@ -921,15 +934,15 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     2. THE "WHY": Explain exactly why this track/album/playlist fits their vibe in one sassy, engaging sentence.
     3. WHERE TO LISTEN: Mention where they can blast this (Spotify, Apple Music, YouTube).
     4. PLAIN TEXT ONLY: Absolutely NO HTML tags.
-    5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). Use ALL CAPS for the Title and Artist.
-    6. EMOJIS: Exactly 2 emojis total.
+    5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). 
+    6. ANTI-PANIC: Do NOT output any language warnings. Respond in the language of the prompt.
 
-    [OUTPUT STRUCTURE]
-    [SONG/ALBUM/PLAYLIST TITLE IN ALL CAPS] by [ARTIST IN ALL CAPS]
-    Genre: [Genre]
+    [OUTPUT FORMAT EXAMPLE]
+    RUMOURS by FLEETWOOD MAC
+    Genre: Classic Rock / Pop
     
-    The Vibe: [Your 1-2 sentence pitch]
-    🎧 Fire it up on: [Streaming Service]
+    The Vibe: The ultimate breakup album that somehow makes cooking pasta feel like a dramatic, passionate affair.
+    🎧 Fire it up on: Spotify
     """
     
     prompt += get_lang_rule(context)
@@ -988,14 +1001,14 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     1. QUALITY: Pick a genuinely great book. Avoid the most obvious high-school reading list clichés unless requested.
     2. THE "WHY": Explain exactly why this book fits their vibe in one sassy, engaging sentence.
     3. PLAIN TEXT ONLY: Absolutely NO HTML tags.
-    4. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). Use ALL CAPS for the Title and Author.
-    5. EMOJIS: Exactly 2 emojis total.
+    4. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#).
+    5. ANTI-PANIC: Do NOT output any language warnings. Respond in the language of the prompt.
 
-    [OUTPUT STRUCTURE]
-    [BOOK TITLE IN ALL CAPS] by [AUTHOR IN ALL CAPS] ([Year])
-    Genre: [Genre]
+    [OUTPUT FORMAT EXAMPLE]
+    DUNE by FRANK HERBERT (1965)
+    Genre: Sci-Fi
     
-    The Pitch: [Your 1-2 sentence pitch]
+    The Pitch: A sprawling, political space opera about giant worms and magical sand that will make you look at the desert completely differently.
     """
     
     prompt += get_lang_rule(context)
