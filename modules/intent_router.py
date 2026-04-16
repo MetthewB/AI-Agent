@@ -14,10 +14,9 @@ from modules.ai_core import ask_llm
 
 # Import all the commands we need to trigger
 from modules.commands import (
-    is_authorized, train_command, weather_command, news_command, 
-    portfolio_command, recipe_command, grocery_command, 
-    grocery_remove_command, stats_command, cat_command, 
-    dateidea_command, remind_command, research_command
+    is_authorized, train_command, weather_command, news_command, portfolio_command, recipe_command, grocery_command, 
+    grocery_remove_command, stats_command, cat_command, dateidea_command, remind_command, research_command, movie_command,
+    music_command, book_command
 )
 
 logger = logging.getLogger(__name__)
@@ -63,6 +62,9 @@ async def parse_intent(user_text: str) -> dict:
     --- UTILITIES & FUN ---
     - remind: User wants a timer, alarm, or reminder. -> data: "time + message" (e.g., "15m flip the laundry")
     - cat: User wants a cat gif or feline dopamine. -> data: ""
+    - music: User wants a song, album, or playlist recommendation. -> data: "the vibe or genre"
+    - movie: User wants a film recommendation. -> data: "the genre or vibe"
+    - book: User wants a book, novel, or reading recommendation. -> data: "the topic or vibe"
     
     --- FALLBACK ---
     - chat: General greetings, casual conversation, or abstract questions not fitting above. -> data: "the original user text"
@@ -113,6 +115,18 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif action == "grocery_list":
         context.args = []
         await grocery_command(update, context)
+
+    elif action == "movie":
+        context.args = []
+        await movie_command(update, context)
+
+    elif action == "music":
+        context.args = []
+        await music_command(update, context)
+
+    elif action == "book":
+        context.args = []
+        await book_command(update, context)
         
     elif action == "weather":
         context.args = [data]
@@ -229,6 +243,9 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         - recipe: args = ["ingredient1 ingredient2"] 
         - grocery: args = [] (to view list) OR args = ["item"] (to add)
         - grocery_remove: args = ["item"]
+        - movie: args = ["topic"]
+        - music: args = ["topic"]
+        - book: args = ["topic"]
         - stats: args = [] 
         - cat: args = [] 
         - dateidea: args = ["city"]
@@ -273,6 +290,9 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "recipe": recipe_command,
             "grocery": grocery_command,
             "grocery_remove": grocery_remove_command,
+            "movie": movie_command,
+            "music": music_command,
+            "book": book_command,
             "stats": stats_command,
             "cat": cat_command,
             "dateidea": dateidea_command,

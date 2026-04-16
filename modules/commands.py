@@ -97,7 +97,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /stats - Weekly performance review\n\n"
         "<b>🎉 Fun & Extras</b>\n"
         "• /cat - Instant feline dopamine\n"
-        "• /dateidea [city] - Generate a date idea"
+        "• /dateidea [city] - Generate a date idea\n"
+        "• /movie [topic] - Recommend a movie\n"
+        "• /music [topic] - Recommend a song/album/playlist\n"
+        "• /book [topic] - Recommend a book/novel"
     )
     await update.message.reply_text(welcome, parse_mode=ParseMode.HTML)
 
@@ -827,6 +830,185 @@ async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"❌ Cat API error: {e}")
         await update.effective_message.reply_text("The cats are sleeping. 😴")
+
+async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
+    
+    keywords = " ".join(context.args)
+    if not keywords:
+        await update.message.reply_text("⚠️ <b>Usage:</b> /movie [vibe/genre/actors]\n<i>Example: /movie scary with dogs but a happy ending</i>", parse_mode=ParseMode.HTML)
+        return
+
+    safe_keywords = html.escape(keywords)
+    status_msg = await update.message.reply_text(f"🍿 <i>Dimming the lights and searching for '{safe_keywords}'...</i>", parse_mode=ParseMode.HTML)
+    
+    prompt = f"""
+    [ROLE]
+    You are an elite, opinionated Film Sommelier. 
+
+    [CONTEXT]
+    The user wants a movie recommendation based on these vibes: "{keywords}"
+    
+    [TASK]
+    Suggest ONE perfect movie. 
+
+    [STRICT INSTRUCTIONS]
+    1. QUALITY: Pick a genuinely good movie (IMDb 7.0+). No generic garbage unless requested.
+    2. THE "WHY": Explain exactly why it fits their weird/specific keywords in one sassy sentence.
+    3. WHERE TO WATCH: Guess the most likely streaming service (Netflix, Prime, Apple) or say "Rent it."
+    4. PLAIN TEXT ONLY: Absolutely NO HTML tags.
+    5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). Use ALL CAPS for the title.
+    6. EMOJIS: Exactly 2 emojis total.
+
+    [OUTPUT STRUCTURE]
+    [MOVIE TITLE IN ALL CAPS] ([Year])
+    Genre: [Genre]
+    
+    The Pitch: [Your 1-2 sentence pitch]
+    🍿 Likely on: [Streaming Service]
+    """
+    
+    prompt += get_lang_rule(context)
+    suggestion = await ask_llm(prompt) 
+    
+    keyboard = [[InlineKeyboardButton("🔄 Re-roll", callback_data="reroll_movie")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    await status_msg.edit_text(suggestion, reply_markup=reply_markup)
+
+async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
+    
+    query = update.callback_query
+    if query:
+        await query.answer()
+        logger.info(f"▶️ User {update.effective_chat.id} triggered re-roll for /music")
+        keywords = context.user_data.get('last_music', 'chill acoustic')
+    else:
+        logger.info(f"▶️ User {update.effective_chat.id} triggered /music")
+        keywords = " ".join(context.args)
+        context.user_data['last_music'] = keywords
+        
+    if not keywords:
+        usage_text = (
+            "⚠️ <b>Usage:</b> /music [genre/vibe/activity]\n"
+            "<i>Examples:</i>\n"
+            "• <code>/music alternative rock</code>\n"
+            "• <code>/music playlist de musculation</code>\n"
+            "• <code>/music cooking pasta with wine</code>"
+        )
+        await update.effective_message.reply_text(usage_text, parse_mode=ParseMode.HTML)
+        return
+
+    safe_keywords = html.escape(keywords)
+    status_msg = await update.effective_message.reply_text(
+        f"🎧 <i>Putting on my headphones and crate-digging for '{safe_keywords}'...</i>", 
+        parse_mode=ParseMode.HTML
+    )
+    
+    prompt = f"""
+    [ROLE]
+    You are an elite, highly opinionated DJ and Music Curator. 
+
+    [CONTEXT]
+    The user wants a music recommendation based on these vibes: "{keywords}"
+    
+    [TASK]
+    Suggest ONE perfect song, album, or specific playlist concept.
+
+    [STRICT INSTRUCTIONS]
+    1. QUALITY: Pick something genuinely great. Avoid the most obvious top-40 clichés unless specifically requested.
+    2. THE "WHY": Explain exactly why this track/album/playlist fits their vibe in one sassy, engaging sentence.
+    3. WHERE TO LISTEN: Mention where they can blast this (Spotify, Apple Music, YouTube).
+    4. PLAIN TEXT ONLY: Absolutely NO HTML tags.
+    5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). Use ALL CAPS for the Title and Artist.
+    6. EMOJIS: Exactly 2 emojis total.
+
+    [OUTPUT STRUCTURE]
+    [SONG/ALBUM/PLAYLIST TITLE IN ALL CAPS] by [ARTIST IN ALL CAPS]
+    Genre: [Genre]
+    
+    The Vibe: [Your 1-2 sentence pitch]
+    🎧 Fire it up on: [Streaming Service]
+    """
+    
+    prompt += get_lang_rule(context)
+    suggestion = await ask_llm(prompt) 
+    
+    keyboard = [[InlineKeyboardButton("🔄 Spin another track", callback_data="reroll_music")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    try:
+        await status_msg.edit_text(suggestion, reply_markup=reply_markup)
+    except Exception as e:
+        logger.error(f"❌ Music Display Error: {e}")
+        await status_msg.edit_text(f"⚠️ Track suggestion failed: {str(e)}")
+
+async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return
+    
+    query = update.callback_query
+    if query:
+        await query.answer()
+        logger.info(f"▶️ User {update.effective_chat.id} triggered re-roll for /book")
+        keywords = context.user_data.get('last_book', 'a cozy mystery')
+    else:
+        logger.info(f"▶️ User {update.effective_chat.id} triggered /book")
+        keywords = " ".join(context.args)
+        context.user_data['last_book'] = keywords
+        
+    if not keywords:
+        usage_text = (
+            "⚠️ <b>Usage:</b> /book [genre/vibe/topic]\n"
+            "<i>Examples:</i>\n"
+            "• <code>/book sci-fi with philosophical themes</code>\n"
+            "• <code>/book a cozy mystery set in winter</code>\n"
+            "• <code>/book something to make me smarter about money</code>"
+        )
+        await update.effective_message.reply_text(usage_text, parse_mode=ParseMode.HTML)
+        return
+
+    safe_keywords = html.escape(keywords)
+    status_msg = await update.effective_message.reply_text(
+        f"📚 <i>Browsing the library for '{safe_keywords}'...</i>", 
+        parse_mode=ParseMode.HTML
+    )
+    
+    prompt = f"""
+    [ROLE]
+    You are an elite, highly opinionated Literary Curator and Librarian. 
+
+    [CONTEXT]
+    The user wants a book recommendation based on these vibes: "{keywords}"
+    
+    [TASK]
+    Suggest ONE perfect book (fiction or non-fiction based on the prompt).
+
+    [STRICT INSTRUCTIONS]
+    1. QUALITY: Pick a genuinely great book. Avoid the most obvious high-school reading list clichés unless requested.
+    2. THE "WHY": Explain exactly why this book fits their vibe in one sassy, engaging sentence.
+    3. PLAIN TEXT ONLY: Absolutely NO HTML tags.
+    4. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). Use ALL CAPS for the Title and Author.
+    5. EMOJIS: Exactly 2 emojis total.
+
+    [OUTPUT STRUCTURE]
+    [BOOK TITLE IN ALL CAPS] by [AUTHOR IN ALL CAPS] ([Year])
+    Genre: [Genre]
+    
+    The Pitch: [Your 1-2 sentence pitch]
+    """
+    
+    prompt += get_lang_rule(context)
+    suggestion = await ask_llm(prompt) 
+    
+    keyboard = [[InlineKeyboardButton("🔄 Turn the page", callback_data="reroll_book")]]
+    reply_markup = InlineKeyboardMarkup(keyboard)
+    
+    try:
+        await status_msg.edit_text(suggestion, reply_markup=reply_markup)
+    except Exception as e:
+        logger.error(f"❌ Book Display Error: {e}")
+        await status_msg.edit_text(f"⚠️ Book suggestion failed: {str(e)}")
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Log the error and send a telegram message to notify the developer."""

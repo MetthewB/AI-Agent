@@ -8,9 +8,9 @@ from modules.database import init_db
 from modules.config import TOKEN
 
 from modules.commands import (
-    start_command, portfolio_command, news_command, research_command, weather_command, remind_command,
-    grocery_command, grocery_remove_command, grocery_empty_command, grocery_callback_handler, decide_command, 
-    recipe_command, train_command, stats_command, dateidea_command, cat_command, error_handler
+    start_command, portfolio_command, news_command, research_command, weather_command, remind_command, grocery_command, 
+    grocery_remove_command, grocery_empty_command, grocery_callback_handler, decide_command, recipe_command, train_command, 
+    stats_command, dateidea_command, cat_command, movie_command, music_command, book_command, error_handler
 )
 
 from modules.intent_router import voice_handler, message_handler
@@ -69,6 +69,9 @@ def run_bot():
     app.add_handler(CallbackQueryHandler(dateidea_command, pattern="^reroll_dateidea$"))
     app.add_handler(CommandHandler("cat", cat_command))
     app.add_handler(CallbackQueryHandler(cat_command, pattern="^reroll_cat$"))
+    app.add_handler(CommandHandler("movie", movie_command))
+    app.add_handler(CommandHandler("music", music_command))
+    app.add_handler(CommandHandler("book", book_command))
 
     # --- Voice Integration ---
     app.add_handler(MessageHandler(filters.VOICE, voice_handler))
