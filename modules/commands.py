@@ -869,18 +869,18 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Suggest ONE perfect movie. 
 
     [STRICT INSTRUCTIONS]
-    1. QUALITY: Pick a genuinely good movie (IMDb 7.0+). No generic garbage unless requested.
-    2. THE "WHY": Explain exactly why it fits their weird/specific keywords in one sassy sentence.
-    3. WHERE TO WATCH: Guess the most likely streaming service (Netflix, Prime, Apple) or say "Rent it."
+    1. MOVIES ONLY: Suggest a feature film, a TV series or show.
+    2. QUALITY: Pick a genuinely good movie (IMDb 7.0+). No generic garbage unless requested.
+    3. THE PITCH: Write exactly 1 or 2 sentences that explain the plot AND why it fits their keywords.
     4. PLAIN TEXT ONLY: Absolutely NO HTML tags.
     5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). 
-    6. LANGUAGE SYNC: You MUST reply entirely in the language the user used. If they wrote in French, translate the template labels (e.g., use "Genre :", "Le Pitch :").
+    6. LANGUAGE SYNC: You MUST reply entirely in the language the user used (e.g., if French, the whole response must be in French).
 
-    [OUTPUT FORMAT EXAMPLE]
-    THE MATRIX (1999)
-    Genre: Sci-Fi / Action
+    [OUTPUT STRUCTURE]
+    [Movie Title] ([Year])
+    [Translated word for "Genre"]: [Genre]
     
-    The Pitch: A hacker discovers reality is a simulation and learns kung fu to fight robot overlords.
+    [Translated word for "Pitch"]: [Your 1-2 sentence pitch]
     """
     
     prompt += get_lang_rule(context)
@@ -936,18 +936,17 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Suggest ONE perfect song, album, or specific playlist concept.
 
     [STRICT INSTRUCTIONS]
-    1. QUALITY: Pick something genuinely great. Avoid the most obvious top-40 clichés unless specifically requested.
-    2. THE "WHY": Explain exactly why this track/album/playlist fits their vibe in one sassy, engaging sentence.
-    3. WHERE TO LISTEN: Mention where they can blast this (Spotify, Apple Music, YouTube).
-    4. PLAIN TEXT ONLY: Absolutely NO HTML tags.
-    5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). 
-    6. LANGUAGE SYNC: You MUST reply entirely in the language the user used. If they wrote in French, translate the template labels (e.g., use "Genre :", "L'Ambiance :").
+    1. QUALITY: Pick something genuinely great. Avoid the most obvious top-40 clichés.
+    2. THE PITCH: Write exactly 1 or 2 sentences explaining why this track/album fits their vibe.
+    3. PLAIN TEXT ONLY: Absolutely NO HTML tags.
+    4. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). 
+    5. LANGUAGE SYNC: You MUST reply entirely in the language the user used (e.g., if French, the whole response must be in French).
 
-    [OUTPUT FORMAT EXAMPLE]
-    Rumours by Fleetwood Mac
-    Genre: Classic Rock / Pop
+    [OUTPUT STRUCTURE]
+    [Song/Album Title] by [Artist]
+    [Translated word for "Genre"]: [Genre]
     
-    The Vibe: The ultimate breakup album that somehow makes cooking pasta feel like a dramatic, passionate affair.
+    [Translated word for "Pitch"]: [Your 1-2 sentence pitch]
     """
     
     prompt += get_lang_rule(context)
@@ -1003,17 +1002,17 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Suggest ONE perfect book (fiction or non-fiction based on the prompt).
 
     [STRICT INSTRUCTIONS]
-    1. QUALITY: Pick a genuinely great book. Avoid the most obvious high-school reading list clichés unless requested.
-    2. THE "WHY": Explain exactly why this book fits their vibe in one sassy, engaging sentence.
+    1. QUALITY: Pick a genuinely great book. Avoid high-school reading list clichés unless requested.
+    2. THE PITCH: Write exactly 1 or 2 sentences explaining the plot and why it fits their vibe.
     3. PLAIN TEXT ONLY: Absolutely NO HTML tags.
     4. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#).
-    5. LANGUAGE SYNC: You MUST reply entirely in the language the user used. If they wrote in French, translate the template labels (e.g., use "Genre :", "Le Pitch :").
+    5. LANGUAGE SYNC: You MUST reply entirely in the language the user used (e.g., if French, the whole response must be in French).
 
-    [OUTPUT FORMAT EXAMPLE]
-    DUNE by FRANK HERBERT (1965)
-    Genre: Sci-Fi
+    [OUTPUT STRUCTURE]
+    [Book Title] by [Author] ([Year])
+    [Translated word for "Genre"]: [Genre]
     
-    The Pitch: A sprawling, political space opera about giant worms and magical sand that will make you look at the desert completely differently.
+    [Translated word for "Pitch"]: [Your 1-2 sentence pitch]
     """
     
     prompt += get_lang_rule(context)
