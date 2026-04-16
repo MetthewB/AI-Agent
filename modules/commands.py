@@ -1027,3 +1027,7 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception as e:
         logger.error(f"❌ Book Display Error: {e}")
         await status_msg.edit_text(f"⚠️ Book suggestion failed: {str(e)}")
+
+async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Log the error and send a telegram message to notify the developer."""
+    logger.error(f"❌ Telegram API Error: {context.error}")
