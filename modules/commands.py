@@ -849,38 +849,36 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "⚠️ <b>Usage:</b> /movie [vibe/genre/actors]\n"
             "<i>Examples:</i>\n"
             "• <code>/movie scary with dogs but a happy ending</code>\n"
-            "• <code>/movie film d'animation avec un chat</code>\n"
-            "• <code>/movie mind-bending sci-fi</code>"
+            "• <code>/movie film d'animation avec un chat</code>"
         )
         await update.effective_message.reply_text(usage_text, parse_mode=ParseMode.HTML)
         return
 
     safe_keywords = html.escape(keywords)
-    status_msg = await update.effective_message.reply_text(f"🍿 <i>Dimming the lights and searching for '{safe_keywords}'...</i>", parse_mode=ParseMode.HTML)
+    status_msg = await update.effective_message.reply_text(f"🍿 <i>Recherche de '{safe_keywords}'...</i>", parse_mode=ParseMode.HTML)
     
     prompt = f"""
     [ROLE]
-    You are an elite, opinionated Film Sommelier. 
+    You are an elite Film Sommelier. 
 
     [CONTEXT]
-    The user wants a movie recommendation based on these vibes: "{keywords}"
+    The user request is: "{keywords}"
     
     [TASK]
-    Suggest ONE perfect movie. 
+    Suggest ONE perfect movie based on the request.
 
     [STRICT INSTRUCTIONS]
-    1. MOVIES ONLY: Suggest a feature film, a TV series or show.
-    2. QUALITY: Pick a genuinely good movie (IMDb 7.0+). No generic garbage unless requested.
-    3. THE PITCH: Write exactly 1 or 2 sentences that explain the plot AND why it fits their keywords.
-    4. PLAIN TEXT ONLY: Absolutely NO HTML tags.
-    5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). 
-    6. LANGUAGE SYNC: You MUST reply entirely in the language the user used (e.g., if French, the whole response must be in French).
+    1. LANGUAGE: You MUST respond in the EXACT same language as the user request. If the request is in French, every single word of your response must be in French.
+    2. NO TRANSLATION: Do not translate the user's intent to English. Process it in the original language.
+    3. MOVIES ONLY: Suggest a feature film, or TV shows, or series, depending on what is asked.
+    4. NO ALL CAPS: Write the title in standard title case (e.g., "Inception", not "INCEPTION").
+    5. FORMAT: Use the structure below but TRANSLATE the labels (Genre, Pitch) into the user's language.
+    6. PLAIN TEXT ONLY: No HTML, no Markdown (no asterisks).
 
-    [OUTPUT STRUCTURE]
-    [Movie Title] ([Year])
-    [Translated word for "Genre"]: [Genre]
-    
-    [Translated word for "Pitch"]: [Your 1-2 sentence pitch]
+    [STRUCTURE]
+    Title (Year)
+    [Translated Label for Genre]: [Value]
+    [Translated Label for Pitch/Summary]: [1-2 sentences]
     """
     
     prompt += get_lang_rule(context)
@@ -893,7 +891,7 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.edit_text(suggestion, reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"❌ Movie Display Error: {e}")
-        await status_msg.edit_text(f"⚠️ Movie suggestion failed: {str(e)}")
+        await status_msg.edit_text(f"⚠️ Erreur: {str(e)}")
 
 async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
@@ -936,17 +934,17 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Suggest ONE perfect song, album, or specific playlist concept.
 
     [STRICT INSTRUCTIONS]
-    1. QUALITY: Pick something genuinely great. Avoid the most obvious top-40 clichés.
-    2. THE PITCH: Write exactly 1 or 2 sentences explaining why this track/album fits their vibe.
-    3. PLAIN TEXT ONLY: Absolutely NO HTML tags.
-    4. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). 
-    5. LANGUAGE SYNC: You MUST reply entirely in the language the user used (e.g., if French, the whole response must be in French).
+    1. LANGUAGE: You MUST respond in the EXACT same language as the user request. If French, every word must be in French.
+    2. NO TRANSLATION: Process the intent in its original language. Do not convert to English first.
+    3. QUALITY: Pick something genuinely great. Avoid the most obvious top-40 clichés.
+    4. NO ALL CAPS: Use standard Title Case for the title and artist.
+    5. LABELS: Translate the labels "Genre" and "Pitch" into the user's language (e.g., in French use "Genre" and "L'Ambiance").
+    6. PLAIN TEXT ONLY: Absolutely NO HTML tags or Markdown (no asterisks).
 
-    [OUTPUT STRUCTURE]
-    [Song/Album Title] by [Artist]
-    [Translated word for "Genre"]: [Genre]
-    
-    [Translated word for "Pitch"]: [Your 1-2 sentence pitch]
+    [STRUCTURE]
+    Song/Album Title by Artist
+    [Translated Label for Genre]: [Value]
+    [Translated Label for Pitch/Vibe]: [1-2 sentences]
     """
     
     prompt += get_lang_rule(context)
@@ -999,20 +997,20 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     The user wants a book recommendation based on these vibes: "{keywords}"
     
     [TASK]
-    Suggest ONE perfect book (fiction or non-fiction based on the prompt).
+    Suggest ONE perfect book (fiction or non-fiction).
 
     [STRICT INSTRUCTIONS]
-    1. QUALITY: Pick a genuinely great book. Avoid high-school reading list clichés unless requested.
-    2. THE PITCH: Write exactly 1 or 2 sentences explaining the plot and why it fits their vibe.
-    3. PLAIN TEXT ONLY: Absolutely NO HTML tags.
-    4. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#).
-    5. LANGUAGE SYNC: You MUST reply entirely in the language the user used (e.g., if French, the whole response must be in French).
+    1. LANGUAGE: You MUST respond in the EXACT same language as the user request. If French, every word must be in French.
+    2. NO TRANSLATION: Process the intent in its original language. Do not convert to English first.
+    3. QUALITY: Pick a genuinely great book. Avoid high-school reading list clichés.
+    4. NO ALL CAPS: Use standard Title Case for the title and author.
+    5. LABELS: Translate the labels "Genre" and "Pitch" into the user's language (e.g., in French use "Genre" and "Résumé").
+    6. PLAIN TEXT ONLY: Absolutely NO HTML tags or Markdown (no asterisks).
 
-    [OUTPUT STRUCTURE]
-    [Book Title] by [Author] ([Year])
-    [Translated word for "Genre"]: [Genre]
-    
-    [Translated word for "Pitch"]: [Your 1-2 sentence pitch]
+    [STRUCTURE]
+    Book Title by Author (Year)
+    [Translated Label for Genre]: [Value]
+    [Translated Label for Pitch/Summary]: [1-2 sentences]
     """
     
     prompt += get_lang_rule(context)
