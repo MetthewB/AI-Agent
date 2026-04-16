@@ -18,9 +18,8 @@ async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
         "Content-Type": "application/json"
     }
     
-    # Standardized payload format
     payload = {
-        "model": "qwen/qwen-2.5-72b-instruct",
+        "model": "qwen/qwen-2.5-72b-instruct:free", 
         "messages": [{"role": "user", "content": prompt}],
         "max_tokens": max_tokens,
         "temperature": 0.7
