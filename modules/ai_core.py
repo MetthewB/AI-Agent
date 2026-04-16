@@ -1,24 +1,29 @@
 import asyncio
 import logging
 import httpx
-from modules.config import GOOGLE_API_KEY
+from modules.config import OPENROUTER_API_KEY
 
 logger = logging.getLogger(__name__)
 
 # ==========================================
-# CORE INFERENCE FUNCTION (Google AI Studio)
+# CORE INFERENCE FUNCTION (OpenRouter / Qwen)
 # ==========================================
 async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
-    """Sends a prompt to Google AI Studio with automatic retries for 503 errors."""
+    """Sends a prompt to OpenRouter (Qwen 2.5 72B) with automatic retries."""
     
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={GOOGLE_API_KEY}"
+    url = "https://openrouter.ai/api/v1/chat/completions"
     
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    
+    # Standardized payload format
     payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {
-            "maxOutputTokens": max_tokens, 
-            "temperature": 0.7
-        }
+        "model": "qwen/qwen-2.5-72b-instruct",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": max_tokens,
+        "temperature": 0.7
     }
 
     max_retries = 3
@@ -27,23 +32,28 @@ async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
     async with httpx.AsyncClient() as client:
         for attempt in range(max_retries):
             try:
-                logger.info(f"🧠 Sending prompt to Gemini (Limit: {max_tokens}, Attempt: {attempt + 1}/{max_retries})...")
-                res = await client.post(url, json=payload, timeout=30.0)
+                logger.info(f"🧠 Sending prompt to Qwen (Limit: {max_tokens}, Attempt: {attempt + 1}/{max_retries})...")
+                res = await client.post(url, headers=headers, json=payload, timeout=30.0)
                 res.raise_for_status() 
                 
                 logger.info("✅ LLM response generated successfully.")
-                raw_text = res.json()['candidates'][0]['content']['parts'][0]['text']
+                
+                # Standard parsing for OpenRouter/OpenAI
+                raw_text = res.json()['choices'][0]['message']['content']
+                
+                # Keep our ultimate Nuke-It sanitizer to protect Telegram
                 clean = raw_text.replace("*", "").replace("#", "").replace("`", "").replace("<", "").replace(">", "")
 
                 return clean.strip()
                 
             except httpx.HTTPStatusError as e:
+                # 503 (Busy) or 429 (Rate Limit)
                 if e.response.status_code in [503, 429]:
-                    logger.warning(f"⚠️ Google API busy ({e.response.status_code}). Retrying in {base_delay}s...")
+                    logger.warning(f"⚠️ OpenRouter API busy ({e.response.status_code}). Retrying in {base_delay}s...")
                     await asyncio.sleep(base_delay)
                     continue
                 else:
-                    logger.error(f"❌ Google API HTTP Error: {e.response.text}")
+                    logger.error(f"❌ OpenRouter API HTTP Error: {e.response.text}")
                     return "<i>Sorry, my AI brain hit a roadblock.</i>"
                     
             except httpx.TimeoutException:
@@ -54,4 +64,4 @@ async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
                 logger.error(f"❌ General LLM Error: {e}")
                 return "<i>Sorry, my AI brain is a bit foggy right now.</i>"
 
-        return "<i>Google's servers are completely overloaded right now. Give me a minute to breathe! 🚦</i>"
+        return "<i>The AI servers are completely overloaded right now. Give me a minute to breathe! 🚦</i>"
