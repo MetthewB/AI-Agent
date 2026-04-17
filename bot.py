@@ -70,8 +70,11 @@ def run_bot():
     app.add_handler(CommandHandler("cat", cat_command))
     app.add_handler(CallbackQueryHandler(cat_command, pattern="^reroll_cat$"))
     app.add_handler(CommandHandler("movie", movie_command))
+    app.add_handler(CallbackQueryHandler(movie_command, pattern="^reroll_movie$"))
     app.add_handler(CommandHandler("music", music_command))
+    app.add_handler(CallbackQueryHandler(music_command, pattern="^reroll_music$"))
     app.add_handler(CommandHandler("book", book_command))
+    app.add_handler(CallbackQueryHandler(book_command, pattern="^reroll_book$"))
 
     # --- Voice Integration ---
     app.add_handler(MessageHandler(filters.VOICE, voice_handler))

@@ -862,44 +862,37 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     prompt = f"""
     [ROLE]
-    You are an elite Media Sommelier (Movies & Series).
+    You are an elite Media Sommelier.
 
     [CONTEXT]
     User Request: "{keywords}"
-    
+
+    [LANGUAGE ANCHORING - CRITICAL]
+    Because these instructions are in English, you might accidentally drift into English. 
+    To prevent this, you MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
+    If ambiguous, use [LANG: FR].
+    After outputting the tag, write the ENTIRE rest of the response in that chosen language. Translate all labels accordingly.
+
     [TASK]
-    Suggest ONE perfect movie or series based on the request.
+    Suggest ONE perfect movie or series based on the request. 
+    Plain text only. No ALL CAPS titles. No Markdown (no asterisks).
 
-    [STRICT INSTRUCTIONS]
-    1. LANGUAGE: Detect the language of the User Request. 
-       - If the request is in French, respond EXCLUSIVELY in French.
-       - If the request is in English, respond EXCLUSIVELY in English.
-       - If ambiguous, default to French.
-    2. MEDIA TYPE: Provide a movie, TV show, or series based on the user's intent.
-    3. LABELS: Translate the labels (Genre, Pitch/Summary) to match the chosen language.
-    4. STYLE: No all-caps, no Markdown (no asterisks). Plain text only.
-    5. NO WARNINGS: Do not output any meta-comments about your language capabilities.
+    [OUTPUT STRUCTURE]
+    [LANG: XX]
+    🎬 Title (Year)
+    [Translated 'Genre' label]: [Value]
 
-    [OUTPUT STRUCTURE EXAMPLE - ENGLISH]
-    🎬 The Matrix (1999)
-    Genre: Sci-Fi / Action
-
-    Pitch: A hacker discovers reality is a simulation and learns kung fu to fight robot overlords.
-
-    [STRUCTURE DE SORTIE EXEMPLE - FRANÇAIS]
-    🎬 Le Parrain (1972)
-    Genre : Crime / Drame
-    
-    Résumé : Une saga épique sur une famille mafieuse à New York, explorant les thèmes de la loyauté et du pouvoir.
+    [Translated 'Pitch' label]: [1-2 sentence pitch]
     """
     
     suggestion = await ask_llm(prompt) 
+    clean_suggestion = suggestion.replace("[LANG: FR]", "").replace("[LANG: EN]", "").strip()
     
     keyboard = [[InlineKeyboardButton("🔄 Re-roll", callback_data="reroll_movie")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     try:
-        await status_msg.edit_text(suggestion, reply_markup=reply_markup)
+        await status_msg.edit_text(clean_suggestion, reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"❌ Movie Display Error: {e}")
         await status_msg.edit_text(f"⚠️ Erreur: {str(e)}")
@@ -934,44 +927,37 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     prompt = f"""
     [ROLE]
-    You are an elite, highly opinionated DJ and Music Curator.
+    You are an elite DJ and Music Curator.
 
     [CONTEXT]
     User Request: "{keywords}"
-    
+
+    [LANGUAGE ANCHORING - CRITICAL]
+    Because these instructions are in English, you might accidentally drift into English. 
+    To prevent this, you MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
+    If ambiguous (like "Rock" or "Funk"), use [LANG: FR].
+    After outputting the tag, write the ENTIRE rest of the response in that chosen language. Translate all labels accordingly.
+
     [TASK]
-    Suggest ONE perfect song, album, or playlist concept.
+    Suggest ONE perfect song, album, or playlist. 
+    Plain text only. No ALL CAPS titles. No Markdown (no asterisks). Do not output language warnings.
 
-    [STRICT INSTRUCTIONS]
-    1. LANGUAGE: Detect the language of the User Request. 
-       - If the request is in French, respond EXCLUSIVELY in French.
-       - If the request is in English, respond EXCLUSIVELY in English.
-       - If ambiguous (like "Rock"), default to French.
-    2. LABELS: Translate the labels (Genre, Vibe) to match the chosen language.
-    3. NO ALL CAPS: Use standard Title Case for names.
-    4. NO MARKDOWN: No asterisks, no hashtags. Plain text only.
-    5. NO WARNINGS: Do not output any meta-comments or language warnings. Just the recommendation.
+    [OUTPUT STRUCTURE]
+    [LANG: XX]
+    ♫ Title by Artist
+    [Translated 'Genre' label]: [Value]
 
-    [OUTPUT STRUCTURE EXAMPLE - ENGLISH]
-    ♫ Random Access Memories by Daft Punk
-    Genre: Electronic / Funk
-
-    The Vibe: A masterpiece blending futuristic sounds with disco nostalgia.
-
-    [STRUCTURE DE SORTIE EXEMPLE - FRANÇAIS]
-    ♫ Random Access Memories de Daft Punk
-    Genre : Électronique / Funk
-   
-    L'Ambiance : Un chef-d'œuvre mêlant sonorités futuristes et nostalgie disco.
+    [Translated 'Pitch/Vibe' label]: [1-2 sentence pitch]
     """
     
     suggestion = await ask_llm(prompt) 
+    clean_suggestion = suggestion.replace("[LANG: FR]", "").replace("[LANG: EN]", "").strip()
     
     keyboard = [[InlineKeyboardButton("🔄 Spin another track", callback_data="reroll_music")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     try:
-        await status_msg.edit_text(suggestion, reply_markup=reply_markup)
+        await status_msg.edit_text(clean_suggestion, reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"❌ Music Display Error: {e}")
         await status_msg.edit_text(f"⚠️ Track suggestion failed: {str(e)}")
@@ -1007,44 +993,37 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     prompt = f"""
     [ROLE]
-    You are an elite, highly opinionated Literary Curator and Librarian.
+    You are an elite Literary Curator and Librarian.
 
     [CONTEXT]
     User Request: "{keywords}"
-    
+
+    [LANGUAGE ANCHORING - CRITICAL]
+    Because these instructions are in English, you might accidentally drift into English. 
+    To prevent this, you MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
+    If ambiguous, use [LANG: FR].
+    After outputting the tag, write the ENTIRE rest of the response in that chosen language. Translate all labels accordingly.
+
     [TASK]
-    Suggest ONE perfect book (fiction or non-fiction).
+    Suggest ONE perfect book (fiction or non-fiction). 
+    Plain text only. No ALL CAPS titles. No Markdown (no asterisks). Do not output language warnings.
 
-    [STRICT INSTRUCTIONS]
-    1. LANGUAGE: Detect the language of the User Request. 
-       - If the request is in French, respond EXCLUSIVELY in French.
-       - If the request is in English, respond EXCLUSIVELY in English.
-       - If ambiguous, default to French.
-    2. NO TRANSLATION: Do not translate the user's intent to English. Process it in its original language.
-    3. LABELS: Translate the labels (Genre, Pitch/Summary) to match the chosen language.
-    4. STYLE: No all-caps, no Markdown (no asterisks). Plain text only.
-    5. NO WARNINGS: Do not output meta-comments or language restrictions. Just the recommendation.
-
-    [OUTPUT STRUCTURE EXAMPLE - ENGLISH]
-    📖 Project Hail Mary by Andy Weir (2021)
-    Genre: Science Fiction
-
-    Pitch: A lone astronaut must save humanity using science and a very unexpected new friend.
-
-    [STRUCTURE DE SORTIE EXEMPLE - FRANÇAIS]
-    📖 L'Étranger par Albert Camus (1942)
-    Genre : Philosophie / Roman
+    [OUTPUT STRUCTURE]
+    [LANG: XX]
+    📖 Title by Author (Year)
+    [Translated 'Genre' label]: [Value]
     
-    Pitch : Un homme indifférent au monde se retrouve impliqué dans un meurtre absurde sur une plage algérienne.
+    [Translated 'Pitch' label]: [1-2 sentence pitch]
     """
     
     suggestion = await ask_llm(prompt) 
+    clean_suggestion = suggestion.replace("[LANG: FR]", "").replace("[LANG: EN]", "").strip()
     
     keyboard = [[InlineKeyboardButton("🔄 Turn the page", callback_data="reroll_book")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     try:
-        await status_msg.edit_text(suggestion, reply_markup=reply_markup)
+        await status_msg.edit_text(clean_suggestion, reply_markup=reply_markup)
     except Exception as e:
         logger.error(f"❌ Book Display Error: {e}")
         await status_msg.edit_text(f"⚠️ Book suggestion failed: {str(e)}")
