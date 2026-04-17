@@ -90,7 +90,7 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         prompt += get_lang_rule(context)
         summary = await ask_llm(prompt)
         safe_summary = html.escape(summary.replace('*', ''))
-        await status_msg.edit_text(f"📰 <b>Geopolitical Briefing</b>\n\n{safe_summary}", parse_mode=ParseMode.HTML)
+        await status_msg.edit_text(f"📰 <b>Geopolitical Briefing</b>\n──────────────────────\n{safe_summary}", parse_mode=ParseMode.HTML)
     except Exception as e:
         logger.error(f"❌ News Error: {e}")
         await status_msg.edit_text(f"⚠️ News summary failed: {str(e)}")

@@ -31,8 +31,15 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         context.user_data['last_dateidea'] = location_query
         
     display_location = location_query.title()
-    safe_display = html.escape(location_query.title())
-    status_msg = await update.effective_message.reply_text(f"<i>Thinking of something romantic in {safe_display}...</i> 🍷", parse_mode=ParseMode.HTML)
+    safe_display = html.escape(display_location)
+    
+    status_text = f"<i>Thinking of something romantic in {safe_display}... / Recherche d'une idée romantique à {safe_display}...</i> 🍷"
+    
+    if query:
+        status_msg = await query.edit_message_text(status_text, parse_mode=ParseMode.HTML)
+    else:
+        status_msg = await update.effective_message.reply_text(status_text, parse_mode=ParseMode.HTML)
+        
     current_date = datetime.datetime.now().strftime("%A, %B %d, %Y")
     
     weather_condition = "Unknown"
@@ -57,11 +64,17 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     You are a creative, thoughtful Romantic Concierge with deep expertise in local events.
 
     [CONTEXT]
+    - User Request: "{location_query}"
     - Location: {display_location}
     - Today's Date: {current_date}
     - Current Weather: {temp}°C, {weather_condition}
     - Requested Vibe: {vibe}
     
+    [LANGUAGE ANCHORING - CRITICAL]
+    You MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
+    If ambiguous (like just the name of a city), default to French.
+    After outputting the tag, write the ENTIRE rest of the response in that chosen language. Translate labels like "Cost" accordingly.
+
     [TASK]
     Suggest one unique, specific, and fun date idea tailored perfectly to the context.
 
@@ -74,18 +87,23 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     6. EMOJIS: Use exactly 2 or 3 emojis total.
 
     [OUTPUT STRUCTURE]
-    [CATCHY TITLE IN ALL CAPS] - Cost: [Free/$/$$/$$$]
-    [A 2-sentence engaging description explaining the activity and why it fits the {weather_condition} weather.]
+    [LANG: XX]
+    [CATCHY TITLE IN ALL CAPS] - [Translated 'Cost']: [Free/$/$$/$$$]
+    ──────────────────────
+    [A 2-sentence engaging description explaining the activity and why it fits the weather and vibe.]
     """
     
-    prompt += get_lang_rule(context)
     idea = await ask_llm(prompt) 
+    clean_idea = idea.replace("[LANG: FR]", "").replace("[LANG: EN]", "").replace("*", "").strip()
     
     keyboard = [[InlineKeyboardButton("🔄 Re-roll", callback_data="reroll_dateidea")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    await status_msg.edit_text(f"✨ {idea}", reply_markup=reply_markup)
-
+    try:
+        await status_msg.edit_text(f"✨ {clean_idea}", reply_markup=reply_markup)
+    except Exception as e:
+        logger.error(f"❌ Date Idea Display Error: {e}")
+        await status_msg.edit_text(f"⚠️ Erreur: {str(e)}")
 
 async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return

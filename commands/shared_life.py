@@ -107,27 +107,33 @@ async def grocery_empty_command(update: Update, context: ContextTypes.DEFAULT_TY
 
 async def decide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return
-    logger.info(f"▶️ User {update.effective_chat.id} triggered /decide")
-    options_string = " ".join(context.args)
     
-    if not options_string:
-        await update.message.reply_text("⚠️ <b>Usage:</b> /decide [option 1], [option 2]\n<i>Example: /decide Pizza, Sushi</i>", parse_mode=ParseMode.HTML)
-        return
-        
-    options = [opt.strip() for opt in options_string.split(",")]
+    if update.message.text and update.message.text.startswith("/decide"):
+        raw_text = " ".join(context.args)
+        options = [opt.strip() for opt in raw_text.split(",") if opt.strip()]
+    else:
+        options = context.args
+    
     if len(options) < 2:
-        await update.message.reply_text("⚠️ <i>I need at least TWO options to make a decision! Separate them with commas.</i>", parse_mode=ParseMode.HTML)
+        await update.message.reply_text(
+            "🤔 <i>I couldn't quite distinguish the choices. Try something like 'tacos pizza' or 'tacos ou pizza'!</i>", 
+            parse_mode=ParseMode.HTML
+        )
         return
-        
-    choice = random.choice(options)
     
     status_msg = await update.message.reply_text("⚖️ <i>Weighing the options...</i>", parse_mode=ParseMode.HTML)
     await asyncio.sleep(1)
-    await status_msg.edit_text("🎲 <i>Running the algorithms...</i>", parse_mode=ParseMode.HTML)
-    await asyncio.sleep(1.2)
+
+    choice = random.choice(options)
+    safe_choice = html.escape(choice.upper())
     
-    safe_choice = html.escape(choice)
-    await status_msg.edit_text(f"🎯 <b>Decision Made:</b>\n\nI have spoken. You are going with: <b>{safe_choice}</b>", parse_mode=ParseMode.HTML)
+    templates = [
+        f"🪐 The universe has spoken: <b>{safe_choice}</b>!",
+        f"🎲 My digital coin landed on: <b>{safe_choice}</b>.",
+        f"🎯 Hard choice, but I'd go with <b>{safe_choice}</b>."
+    ]
+    
+    await status_msg.edit_text(random.choice(templates), parse_mode=ParseMode.HTML)
 
 async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return

@@ -145,7 +145,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         clean_forecast = forecast.replace("[LANG: FR]", "").replace("[LANG: EN]", "").replace("*", "").strip()
         safe_forecast = html.escape(clean_forecast)
         
-        await status_msg.edit_text(f"🌍 <b>Forecast for {display_name}</b>\n\n{safe_forecast}", parse_mode=ParseMode.HTML)
+        await status_msg.edit_text(f"🌍 <b>Forecast for {display_name}</b>\n──────────────────────\n{safe_forecast}", parse_mode=ParseMode.HTML)
         
     except Exception as e:
         logger.error(f"❌ Weather Command Error: {e}")

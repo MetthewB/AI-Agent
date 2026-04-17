@@ -48,7 +48,7 @@ async def parse_intent(user_text: str) -> list:
     - grocery_remove: User wants to remove/delete/cross off an item. -> data: "the specific item"
     - grocery_list: User wants to see/read the current shopping list. -> data: ""
     - recipe: User wants cooking ideas or recipes based on items. -> data: "the ingredients"
-    - decide: User wants to settle a debate or randomly choose between multiple options (e.g., "decide tacos pizza", "A or B?"). -> data: "the options provided"
+    - decide: User wants to choose between options (e.g., "tacos pizza", "A ou B"). -> data: "option1 | option2 | option3"
 
     --- DATA & INFO ---
     - weather: User asks about temperature or forecasts. -> data: "city name"
@@ -153,7 +153,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await stats_command(update, context)
 
         elif action == "decide":
-            context.args = data.split()
+            options = [opt.strip() for opt in data.split("|") if opt.strip()]
+            context.args = options
             await decide_command(update, context)
             
         elif action == "recipe":

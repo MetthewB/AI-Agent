@@ -85,7 +85,7 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     workout = await ask_llm(prompt)
     clean_workout = workout.replace("[LANG: FR]", "").replace("[LANG: EN]", "").replace("*", "").strip()
     try:
-        await status_msg.edit_text(f"🏃‍♂️ WORKOUT PLAN:\n\n{clean_workout}")
+        await status_msg.edit_text(f"🏃‍♂️ WORKOUT PLAN:\n──────────────────────\n{clean_workout}")
     except Exception as e:
         logger.error(f"❌ Train Display Error: {e}")
         await status_msg.edit_text(f"⚠️ Erreur: {str(e)}")
@@ -203,7 +203,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [OUTPUT STRUCTURE]
         [LANG: XX]
         📊 [Translated '7-DAY PERFORMANCE REVIEW' IN ALL CAPS]
-
+        ──────────────────────
         [Translated 'Total Workouts']: [Value]
         [Translated 'Total Active Time']: [Value]
         (Include Load if it exists in raw data)
