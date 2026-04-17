@@ -37,7 +37,8 @@ async def parse_intent(user_text: str) -> dict:
     [CORE RULES]
     1. TYPO TOLERANCE: Users type fast on mobile. Aggressively autocorrect intent in your mind (e.g., "portgolio" = portfolio, "weathr" = weather, "switzerkland" = switzerland).
     2. SEMANTIC MATCHING: Look for the *meaning* behind the words, not just exact keywords.
-    3. THE "CHAT" FALLBACK: Only use the "chat" action if the message is purely conversational (e.g., "Hello," "How are you?," "Tell me a joke"). If it asks for facts, news, or data, route it to the specific tools below.
+    3. MEDIA VS RESEARCH: If the user is asking for something to watch, read, or listen to, ALWAYS route to movie, book, or music. Only use 'research' if they want factual data, history, or news summaries.
+    4. THE "CHAT" FALLBACK: Only use the "chat" action if the message is purely conversational (e.g., "Hello," "How are you?"). 
 
     [ACTION DICTIONARY]
     Format -> action_name: [Trigger description] -> Data Payload
@@ -52,7 +53,7 @@ async def parse_intent(user_text: str) -> dict:
     - weather: User asks about temperature, sun, rain, or forecasts. -> data: "city name" (leave empty if no city mentioned)
     - portfolio: User asks about stocks, markets, investments, or "portfolio" (and typos). -> data: ""
     - news: User asks for global news, geopolitics, or headlines. -> data: ""
-    - research: User asks "How is [topic]", "What is the status of [topic]", or wants a deep dive/facts (e.g., "job market in switzerland", "history of Rome"). -> data: "the topic"
+    - research: User asks for factual deep dives, history, or status updates (e.g., "job market in switzerland", "history of Rome"). -> data: "the topic"
 
     --- HEALTH & LIFESTYLE ---
     - train: User wants a workout, run, or training plan. -> data: "sport and details"
@@ -62,12 +63,12 @@ async def parse_intent(user_text: str) -> dict:
     --- UTILITIES & FUN ---
     - remind: User wants a timer, alarm, or reminder. -> data: "time + message" (e.g., "15m flip the laundry")
     - cat: User wants a cat gif or feline dopamine. -> data: ""
-    - music: User wants a song, album, or playlist recommendation. -> data: "the vibe or genre"
-    - movie: User wants a film recommendation. -> data: "the genre or vibe"
-    - book: User wants a book, novel, or reading recommendation. -> data: "the topic or vibe"
+    - music: User wants a song, album, artist, or playlist recommendation. -> data: "the vibe, genre, or activity"
+    - movie: User wants a recommendation for a movie, film, TV show, TV series, anime, or asks "what to watch". -> data: "the genre, vibe, actors, or specific constraints"
+    - book: User wants a recommendation for a book, novel, audiobook, manga, or author. -> data: "the topic, genre, or vibe"
     
     --- FALLBACK ---
-    - chat: General greetings, casual conversation, or abstract questions not fitting above. -> data: "the original user text"
+    - chat: General greetings, conversational replies, or abstract questions not fitting above. -> data: "the original user text"
 
     [USER MESSAGE]
     "{user_text}"
