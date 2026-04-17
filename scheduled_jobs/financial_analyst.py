@@ -4,7 +4,6 @@ from datetime import datetime
 from typing import TypedDict
 import yfinance as yf
 from langgraph.graph import StateGraph, END
-from huggingface_hub import InferenceClient
 from ddgs import DDGS
 from dotenv import load_dotenv
 

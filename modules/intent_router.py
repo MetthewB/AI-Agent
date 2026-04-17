@@ -8,16 +8,15 @@ from telegram import Update
 from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
-# Import config and core AI functions
-from modules.config import HF_TOKEN
 from modules.ai_core import ask_llm
+from modules.config import HF_TOKEN
+from modules.utils import is_authorized
 
-# Import all the commands we need to trigger
-from modules.commands import (
-    is_authorized, train_command, weather_command, news_command, portfolio_command, recipe_command, grocery_command, 
-    grocery_remove_command, stats_command, cat_command, dateidea_command, remind_command, research_command, movie_command,
-    music_command, book_command
-)
+from commands.finance_news import portfolio_command, news_command
+from commands.knowledge_util import research_command, weather_command, remind_command
+from commands.shared_life import grocery_command, grocery_remove_command, recipe_command
+from commands.health_fitness import train_command, stats_command
+from commands.fun_extras import movie_command, music_command, book_command, cat_command, dateidea_command
 
 logger = logging.getLogger(__name__)
 

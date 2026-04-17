@@ -4,16 +4,13 @@ import logging
 import requests
 import datetime
 
-# Import Database tools
 from modules.database import SessionLocal, Activity
-# Import credentials from your config module
 from modules.config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_REFRESH_TOKEN
 
-# Set up logging for this specific module
 logger = logging.getLogger(__name__)
 
 # ==========================================
-# 1. AUTHENTICATION
+# AUTHENTICATION
 # ==========================================
 async def get_strava_access_token() -> str:
     """Uses the refresh token to get a temporary access token for Strava."""
@@ -36,7 +33,7 @@ async def get_strava_access_token() -> str:
         return None
 
 # ==========================================
-# 2. DATABASE SYNC (PostgreSQL)
+# DATABASE SYNC (PostgreSQL)
 # ==========================================
 async def sync_activities_to_db(activities_data):
     """
@@ -56,12 +53,10 @@ async def sync_activities_to_db(activities_data):
             if not strava_id:
                 continue
                 
-            # Check if it exists in the database
             exists = db.query(Activity).filter(Activity.strava_id == strava_id).first()
             
             if not exists:
                 try:
-                    # Safely handle dates
                     raw_date = act.get('start_date_local', '')
                     date_str = str(raw_date)[:10] if raw_date else ""
                     
@@ -70,7 +65,6 @@ async def sync_activities_to_db(activities_data):
                     except Exception:
                         date_obj = datetime.datetime.utcnow()
 
-                    # Safely handle numbers
                     sport = act.get('sport_type') or act.get('type', 'Unknown')
                     distance = float(act.get('distance', 0)) / 1000
                     duration = int(act.get('moving_time', 0)) // 60
@@ -83,7 +77,7 @@ async def sync_activities_to_db(activities_data):
                         distance=distance,
                         duration=duration,
                         avg_hr=avg_hr,
-                        coros_load=None # We can integrate Coros regex here later if needed
+                        coros_load=None
                     )
                     
                     db.add(new_act)
@@ -106,7 +100,7 @@ async def sync_activities_to_db(activities_data):
     return new_count
 
 # ==========================================
-# 3. DATA FETCHING & FORMATTING
+# DATA FETCHING & FORMATTING
 # ==========================================
 async def get_recent_strava_activities(limit: int = 5) -> str:
     """Fetches latest activities, syncs them to DB, and returns a formatted string."""
@@ -124,7 +118,6 @@ async def get_recent_strava_activities(limit: int = 5) -> str:
         if not activities or not isinstance(activities, list): 
             return "No recent history."
 
-        # Trigger background sync to PostgreSQL
         await sync_activities_to_db(activities)
         
         history = []
@@ -138,7 +131,6 @@ async def get_recent_strava_activities(limit: int = 5) -> str:
             
             hr = act.get('average_heartrate', 'N/A')
             
-            # Extract Coros Load if it exists in the description
             coros_load = "Unknown"
             if desc and "charge d'entraînement" in desc.lower():
                 match = re.search(r'(\d+)\s*charge', desc.lower())

@@ -4,14 +4,12 @@ import certifi
 from pymongo import MongoClient
 from dotenv import load_dotenv
 
-# Set up logging for this specific module
 logger = logging.getLogger(__name__)
 
-# Load environment variables (Local testing)
 load_dotenv()
 
 # ==========================================
-# 1. ENVIRONMENT VARIABLES
+# ENVIRONMENT VARIABLES
 # ==========================================
 TOKEN = os.environ.get("TELEGRAM_TOKEN")
 HF_TOKEN = os.environ.get("HF_TOKEN")
@@ -23,7 +21,7 @@ STRAVA_REFRESH_TOKEN = os.environ.get("STRAVA_REFRESH_TOKEN")
 MONGO_URI = os.environ.get("MONGO_URI")
 
 # ==========================================
-# 2. VIP AUTHORIZATION LIST
+# VIP AUTHORIZATION LIST
 # ==========================================
 AUTHORIZED_USERS = []
 if CHAT_ID_ENV:
@@ -35,7 +33,7 @@ if CHAT_ID_ENV:
 logger.info(f"✅ VIP List Loaded: {AUTHORIZED_USERS}")
 
 # ==========================================
-# 3. STATIC DATA MAPS
+# STATIC DATA MAPS
 # ==========================================
 PORTFOLIO_MAP = {
     "EUNL.DE": "MSCI World (EUNL)",
@@ -54,9 +52,8 @@ WMO_WEATHER_CODES = {
 }
 
 # ==========================================
-# 4. DATABASE SETUP (MONGODB)
+# DATABASE SETUP (MONGODB)
 # ==========================================
-# Initialize as None so other modules don't crash if the DB is missing
 grocery_collection = None 
 
 if MONGO_URI:

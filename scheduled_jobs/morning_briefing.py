@@ -3,7 +3,6 @@ import requests
 from datetime import datetime, timedelta
 import pytz
 from typing import TypedDict
-from huggingface_hub import InferenceClient
 from ddgs import DDGS
 from icalevents.icalevents import events
 from langgraph.graph import StateGraph, END
