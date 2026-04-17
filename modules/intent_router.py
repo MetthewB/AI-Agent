@@ -150,6 +150,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await cat_command(update, context)
             
         elif action == "stats":
+            context.args = data.split() if data else []
             await stats_command(update, context)
 
         elif action == "decide":

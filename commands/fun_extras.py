@@ -88,7 +88,7 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     [OUTPUT STRUCTURE]
     [LANG: XX]
-    [CATCHY TITLE IN ALL CAPS] - [Translated 'Cost']: [Free/$/$$/$$$]
+    [Catchy Title] - [Translated 'Cost']: [Free/$/$$/$$$]
     ──────────────────────
     [A 2-sentence engaging description explaining the activity and why it fits the weather and vibe.]
     """
