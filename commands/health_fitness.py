@@ -50,15 +50,15 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     [LANGUAGE ANCHORING - CRITICAL]
     You MUST begin your response by explicitly declaring the detected language of the Client Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
-    If ambiguous (like "gym" or "push day"), default to French.
-    After outputting the tag, write the ENTIRE rest of the response in that chosen language. Translate all headers accordingly.
+    If ambiguous, default to French.
+    After outputting the tag, write the ENTIRE rest of the response in that chosen language.
 
     [TASK]
     Design a tailored, one-off workout session based on the goal and current fatigue levels.
 
     [STRICT INSTRUCTIONS]
-    1. FATIGUE ANALYSIS: Distinguish between sports. If history says 'Run', legs may be tired but swimming is fresh.
-    2. FORMATTING: Use normal sentence case. Do NOT use ALL CAPS for the instructions or exercises. Use standard Title Case for headers.
+    1. FATIGUE ANALYSIS: Distinguish between sports.
+    2. FORMATTING: Use normal Sentence Case or Title Case. Do NOT use all caps (NO MAJUSCULES). Do not use brackets [] in the output.
     3. PACE INTELLIGENCE: 
        - RUNNING: Calculate baseline pace (min/km). Prescribe a target pace in min/km.
        - SWIMMING: Prescribe pace in min/100m.
@@ -67,10 +67,12 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     [OUTPUT STRUCTURE]
     [LANG: XX]
+    🏃‍♂️ [Translated 'Workout Plan' in Title Case]
+    ──────────────────────
     📊 [Translated 'Recent Training History']
     • [DD/MM]: [Sport] - [Distance]km - [Duration] mins (Only show distance if > 0)
 
-    🎯 [Catchy Workout Title in Title Case]
+    🎯 [Catchy Workout Title]
 
     🔥 [Translated 'Warm-up']
     • [Drill/distance]
@@ -85,7 +87,7 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     workout = await ask_llm(prompt)
     clean_workout = workout.replace("[LANG: FR]", "").replace("[LANG: EN]", "").replace("*", "").strip()
     try:
-        await status_msg.edit_text(f"🏃‍♂️ WORKOUT PLAN:\n──────────────────────\n{clean_workout}")
+        await status_msg.edit_text(clean_workout)
     except Exception as e:
         logger.error(f"❌ Train Display Error: {e}")
         await status_msg.edit_text(f"⚠️ Erreur: {str(e)}")
@@ -196,13 +198,14 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         1. SMART GYM LOGIC: If they did gym/weight training with 0 Coros Load, DO NOT say they were resting. Acknowledge the strength work!
         2. RECOVERY PROTOCOL: If Total Coros Load > 400, strictly advise them to prioritize recovery.
         3. DATA ACCURACY: Do not alter the numbers from the Raw Client Stats. Just format and translate them.
-        4. PLAIN TEXT ONLY: Absolutely NO HTML tags (no <b>, no <i>).
-        5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). Use ALL CAPS for the top header only.
-        6. EMOJIS: Use emojis tastefully for the headers and the coach's note.
+        4. CASING: Use normal Sentence Case or Title Case for all headers and labels. Do NOT use all caps (NO MAJUSCULES).
+        5. PLAIN TEXT ONLY: Absolutely NO HTML tags (no <b>, no <i>).
+        6. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). 
+        7. EMOJIS: Use emojis tastefully for the headers and the coach's note.
 
         [OUTPUT STRUCTURE]
         [LANG: XX]
-        📊 [Translated '7-DAY PERFORMANCE REVIEW' IN ALL CAPS]
+        📊 [Translated '7-day Performance Review']
         ──────────────────────
         [Translated 'Total Workouts']: [Value]
         [Translated 'Total Active Time']: [Value]

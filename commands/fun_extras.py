@@ -83,12 +83,12 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     2. SEASONAL AWARENESS: Ensure the activity is possible on {current_date}. 
     3. LOCAL LOGIC: The activity must be geographically relevant to {display_location}. No generic parks.
     4. PLAIN TEXT ONLY: Absolutely NO HTML tags.
-    5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). Use ALL CAPS for the title.
+    5. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). Use Normal Sentence Case or Title Case for the title (do NOT use all caps).
     6. EMOJIS: Use exactly 2 or 3 emojis total.
 
     [OUTPUT STRUCTURE]
     [LANG: XX]
-    [Catchy Title] - [Translated 'Cost']: [Free/$/$$/$$$]
+    [Catchy Title in Title Case] - [Translated 'Cost']: [Free/$/$$/$$$]
     ──────────────────────
     [A 2-sentence engaging description explaining the activity and why it fits the weather and vibe.]
     """
