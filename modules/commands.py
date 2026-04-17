@@ -881,12 +881,13 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     5. NO WARNINGS: Do not output any meta-comments about your language capabilities.
 
     [OUTPUT STRUCTURE EXAMPLE - ENGLISH]
-    The Matrix (1999)
+    🎬 The Matrix (1999)
     Genre: Sci-Fi / Action
-    The Pitch: A hacker discovers reality is a simulation and learns kung fu to fight robot overlords.
+
+    Pitch: A hacker discovers reality is a simulation and learns kung fu to fight robot overlords.
 
     [STRUCTURE DE SORTIE EXEMPLE - FRANÇAIS]
-    Le Parrain (1972)
+    🎬 Le Parrain (1972)
     Genre : Crime / Drame
     
     Résumé : Une saga épique sur une famille mafieuse à New York, explorant les thèmes de la loyauté et du pouvoir.
@@ -952,12 +953,13 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     5. NO WARNINGS: Do not output any meta-comments or language warnings. Just the recommendation.
 
     [OUTPUT STRUCTURE EXAMPLE - ENGLISH]
-    Random Access Memories by Daft Punk
+    ♫ Random Access Memories by Daft Punk
     Genre: Electronic / Funk
+
     The Vibe: A masterpiece blending futuristic sounds with disco nostalgia.
 
     [STRUCTURE DE SORTIE EXEMPLE - FRANÇAIS]
-    Random Access Memories de Daft Punk
+    ♫ Random Access Memories de Daft Punk
     Genre : Électronique / Funk
    
     L'Ambiance : Un chef-d'œuvre mêlant sonorités futuristes et nostalgie disco.
@@ -1024,12 +1026,13 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     5. NO WARNINGS: Do not output meta-comments or language restrictions. Just the recommendation.
 
     [OUTPUT STRUCTURE EXAMPLE - ENGLISH]
-    Project Hail Mary by Andy Weir (2021)
+    📖 Project Hail Mary by Andy Weir (2021)
     Genre: Science Fiction
-    The Pitch: A lone astronaut must save humanity using science and a very unexpected new friend.
+
+    Pitch: A lone astronaut must save humanity using science and a very unexpected new friend.
 
     [STRUCTURE DE SORTIE EXEMPLE - FRANÇAIS]
-    L'Étranger par Albert Camus (1942)
+    📖 L'Étranger par Albert Camus (1942)
     Genre : Philosophie / Roman
     
     Pitch : Un homme indifférent au monde se retrouve impliqué dans un meurtre absurde sur une plage algérienne.
