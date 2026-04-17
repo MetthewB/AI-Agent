@@ -855,10 +855,26 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     safe_keywords = html.escape(keywords)
-    status_msg = await update.effective_message.reply_text(
-        f"🍿 <i>Searching for / Recherche de '{safe_keywords}'...</i>", 
-        parse_mode=ParseMode.HTML
-    )
+    status_text = f"🍿 <i>Searching for / Recherche de '{safe_keywords}'...</i>"
+    
+    if query:
+        status_msg = await query.edit_message_text(status_text, parse_mode=ParseMode.HTML)
+    else:
+        status_msg = await update.effective_message.reply_text(status_text, parse_mode=ParseMode.HTML)
+    
+    current_time = time.time()
+    one_week_seconds = 7 * 24 * 60 * 60
+    
+    if 'history_movie' not in context.user_data:
+        context.user_data['history_movie'] = []
+        
+    context.user_data['history_movie'] = [
+        item for item in context.user_data['history_movie'] 
+        if (current_time - item['timestamp']) < one_week_seconds
+    ]
+    
+    history_titles = [item['title'] for item in context.user_data['history_movie']]
+    history_text = "\n".join(f"- {t}" for t in history_titles) if history_titles else "None."
     
     prompt = f"""
     [ROLE]
@@ -866,6 +882,10 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     [CONTEXT]
     User Request: "{keywords}"
+
+    [DO NOT RECOMMEND - RECENT SUGGESTIONS]
+    You MUST NOT suggest any of the following movies or series. They have already been recommended recently:
+    {history_text}
 
     [LANGUAGE ANCHORING - CRITICAL]
     Because these instructions are in English, you might accidentally drift into English. 
@@ -887,6 +907,13 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     suggestion = await ask_llm(prompt) 
     clean_suggestion = suggestion.replace("[LANG: FR]", "").replace("[LANG: EN]", "").strip()
+    
+    first_line = clean_suggestion.split('\n')[0].strip()
+    if first_line and first_line not in history_titles:
+        context.user_data['history_movie'].append({
+            'timestamp': current_time,
+            'title': first_line
+        })
     
     keyboard = [[InlineKeyboardButton("🔄 Re-roll", callback_data="reroll_movie")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -923,8 +950,26 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     safe_keywords = html.escape(keywords)
     
     status_text = f"🎧 <i>Searching for / Recherche de '{safe_keywords}'...</i>"
-    status_msg = await update.effective_message.reply_text(status_text, parse_mode=ParseMode.HTML)
+    if query:
+        status_msg = await query.edit_message_text(status_text, parse_mode=ParseMode.HTML)
+    else:
+        status_msg = await update.effective_message.reply_text(status_text, parse_mode=ParseMode.HTML)
     
+    current_time = time.time()
+    one_week_in_seconds = 7 * 24 * 60 * 60
+    
+    if 'history_music' not in context.user_data:
+        context.user_data['history_music'] = []
+        
+    valid_history = [
+        item for item in context.user_data['history_music'] 
+        if (current_time - item['timestamp']) < one_week_in_seconds
+    ]
+    context.user_data['history_music'] = valid_history
+    
+    history_titles = [item['title'] for item in valid_history]
+    history_text = "\n".join(f"- {title}" for title in history_titles) if history_titles else "None."
+
     prompt = f"""
     [ROLE]
     You are an elite DJ and Music Curator.
@@ -932,10 +977,14 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [CONTEXT]
     User Request: "{keywords}"
 
+    [DO NOT RECOMMEND - RECENT SUGGESTIONS]
+    You MUST NOT suggest any of the following items. They have already been recommended recently:
+    {history_text}
+
     [LANGUAGE ANCHORING - CRITICAL]
     Because these instructions are in English, you might accidentally drift into English. 
     To prevent this, you MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
-    If ambiguous (like "Rock" or "Funk"), use [LANG: FR].
+    If ambiguous, use [LANG: EN].
     After outputting the tag, write the ENTIRE rest of the response in that chosen language. Translate all labels accordingly.
 
     [TASK]
@@ -952,6 +1001,13 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     suggestion = await ask_llm(prompt) 
     clean_suggestion = suggestion.replace("[LANG: FR]", "").replace("[LANG: EN]", "").strip()
+    
+    first_line = clean_suggestion.split('\n')[0].strip()
+    if first_line and first_line not in history_titles:
+        context.user_data['history_music'].append({
+            'timestamp': current_time,
+            'title': first_line
+        })
     
     keyboard = [[InlineKeyboardButton("🔄 Spin another track", callback_data="reroll_music")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
@@ -986,10 +1042,26 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     safe_keywords = html.escape(keywords)
-    status_msg = await update.effective_message.reply_text(
-        f"📚 <i>Searching for / Recherche de '{safe_keywords}'...</i>", 
-        parse_mode=ParseMode.HTML
-    )
+    status_text = f"📚 <i>Searching for / Recherche de '{safe_keywords}'...</i>"
+    
+    if query:
+        status_msg = await query.edit_message_text(status_text, parse_mode=ParseMode.HTML)
+    else:
+        status_msg = await update.effective_message.reply_text(status_text, parse_mode=ParseMode.HTML)
+    
+    current_time = time.time()
+    one_week_seconds = 7 * 24 * 60 * 60
+    
+    if 'history_book' not in context.user_data:
+        context.user_data['history_book'] = []
+        
+    context.user_data['history_book'] = [
+        item for item in context.user_data['history_book'] 
+        if (current_time - item['timestamp']) < one_week_seconds
+    ]
+    
+    history_titles = [item['title'] for item in context.user_data['history_book']]
+    history_text = "\n".join(f"- {t}" for t in history_titles) if history_titles else "None."
     
     prompt = f"""
     [ROLE]
@@ -998,10 +1070,14 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [CONTEXT]
     User Request: "{keywords}"
 
+    [DO NOT RECOMMEND - RECENT SUGGESTIONS]
+    You MUST NOT suggest any of the following books. They have already been recommended recently:
+    {history_text}
+
     [LANGUAGE ANCHORING - CRITICAL]
     Because these instructions are in English, you might accidentally drift into English. 
     To prevent this, you MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
-    If ambiguous, use [LANG: FR].
+    If ambiguous, use [LANG: EN].
     After outputting the tag, write the ENTIRE rest of the response in that chosen language. Translate all labels accordingly.
 
     [TASK]
@@ -1018,6 +1094,13 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     suggestion = await ask_llm(prompt) 
     clean_suggestion = suggestion.replace("[LANG: FR]", "").replace("[LANG: EN]", "").strip()
+    
+    first_line = clean_suggestion.split('\n')[0].strip()
+    if first_line and first_line not in history_titles:
+        context.user_data['history_book'].append({
+            'timestamp': current_time,
+            'title': first_line
+        })
     
     keyboard = [[InlineKeyboardButton("🔄 Turn the page", callback_data="reroll_book")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
