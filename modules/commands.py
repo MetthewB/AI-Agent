@@ -888,6 +888,7 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [STRUCTURE DE SORTIE EXEMPLE - FRANÇAIS]
     Le Parrain (1972)
     Genre : Crime / Drame
+    
     Résumé : Une saga épique sur une famille mafieuse à New York, explorant les thèmes de la loyauté et du pouvoir.
     """
     
@@ -958,6 +959,7 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [STRUCTURE DE SORTIE EXEMPLE - FRANÇAIS]
     Random Access Memories de Daft Punk
     Genre : Électronique / Funk
+   
     L'Ambiance : Un chef-d'œuvre mêlant sonorités futuristes et nostalgie disco.
     """
     
@@ -1029,7 +1031,8 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [STRUCTURE DE SORTIE EXEMPLE - FRANÇAIS]
     L'Étranger par Albert Camus (1942)
     Genre : Philosophie / Roman
-    Le Pitch : Un homme indifférent au monde se retrouve impliqué dans un meurtre absurde sur une plage algérienne.
+    
+    Pitch : Un homme indifférent au monde se retrouve impliqué dans un meurtre absurde sur une plage algérienne.
     """
     
     suggestion = await ask_llm(prompt) 

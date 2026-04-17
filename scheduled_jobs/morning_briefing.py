@@ -11,11 +11,35 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-llm_client = InferenceClient(model="Qwen/Qwen2.5-Coder-32B-Instruct", token=os.environ.get("HF_TOKEN"))
-
 def ask_llm(prompt: str) -> str:
-    messages = [{"role": "user", "content": prompt}]
-    return llm_client.chat_completion(messages=messages, max_tokens=350, temperature=0.3).choices[0].message.content
+    """Routes the prompt to OpenRouter's Premium Qwen model."""
+    url = "https://openrouter.ai/api/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {os.environ.get('OPENROUTER_API_KEY')}",
+        "Content-Type": "application/json"
+    }
+    
+    payload = {
+        "model": "qwen/qwen-2.5-72b-instruct",
+        "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": 350,
+        "temperature": 0.3
+    }
+
+    try:
+        res = requests.post(url, headers=headers, json=payload, timeout=30.0)
+        res.raise_for_status() 
+        
+        raw_text = res.json().get('choices', [{}])[0].get('message', {}).get('content', '')
+        
+        if raw_text is None:
+            raw_text = ""
+            
+        return raw_text.strip()
+        
+    except Exception as e:
+        print(f"❌ OpenRouter LLM Error: {e}")
+        return "Error generating briefing."
 
 def get_weather(lat=46.5197, lon=6.6323):
     try:
