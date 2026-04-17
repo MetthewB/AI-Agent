@@ -1,8 +1,7 @@
 import re
-import os
 import logging
 from telegram import Update
-from config import AUTHORIZED_USERS
+from modules.config import AUTHORIZED_USERS
 
 logger = logging.getLogger(__name__)
 
