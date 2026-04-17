@@ -197,8 +197,12 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     After outputting the tag, write the ENTIRE rest of the response in that chosen language. Translate all labels accordingly.
 
     [TASK]
-    Suggest ONE perfect movie or series based on the request. 
-    Plain text only. No ALL CAPS titles. No Markdown (no asterisks).
+    Suggest ONE perfect movie or series based on the TRUE MEANING of the request. 
+
+    [STRICT INSTRUCTIONS]
+    1. SEMANTIC CURATION: Interpret the *vibe*, *plot*, or *meaning* of the request. If the user asks for "un film pour pleurer" (a movie to cry to), recommend a genuinely emotional masterpiece. DO NOT just search for a movie with the user's exact words in the title.
+    2. NO HALLUCINATIONS: You must recommend a REAL, existing, released movie or TV series. Do not invent titles, directors, or plots.
+    3. FORMATTING: Plain text only. No ALL CAPS titles. No Markdown (no asterisks). Do not use brackets [] in the output.
 
     [OUTPUT STRUCTURE]
     [LANG: XX]
@@ -209,7 +213,7 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     
     suggestion = await ask_llm(prompt) 
-    clean_suggestion = suggestion.replace("[LANG: FR]", "").replace("[LANG: EN]", "").strip()
+    clean_suggestion = suggestion.replace("[LANG: FR]", "").replace("[LANG: EN]", "").replace("*", "").strip()
     
     first_line = clean_suggestion.split('\n')[0].strip()
     if first_line and first_line not in history_titles:
@@ -291,8 +295,12 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     After outputting the tag, write the ENTIRE rest of the response in that chosen language. Translate all labels accordingly.
 
     [TASK]
-    Suggest ONE perfect song, album, or playlist. 
-    Plain text only. No ALL CAPS titles. No Markdown (no asterisks). Do not output language warnings.
+    Suggest ONE perfect song, album, or playlist based on the TRUE MEANING of the request.
+
+    [STRICT INSTRUCTIONS]
+    1. SEMANTIC CURATION: Interpret the *vibe*, *activity*, or *meaning* of the request. If the user asks for "musique pour pleurer" (music to cry to), recommend a genuinely emotional masterpiece. DO NOT just search for a song with the user's exact words in the title.
+    2. NO HALLUCINATIONS: You must recommend a REAL, existing, published track or album by a REAL artist. Do not invent titles or artists.
+    3. FORMATTING: Plain text only. No ALL CAPS titles. No Markdown (no asterisks). Do not use brackets [] in the output.
 
     [OUTPUT STRUCTURE]
     [LANG: XX]
@@ -303,7 +311,7 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     
     suggestion = await ask_llm(prompt) 
-    clean_suggestion = suggestion.replace("[LANG: FR]", "").replace("[LANG: EN]", "").strip()
+    clean_suggestion = suggestion.replace("[LANG: FR]", "").replace("[LANG: EN]", "").replace("*", "").strip()
     
     first_line = clean_suggestion.split('\n')[0].strip()
     if first_line and first_line not in history_titles:
@@ -384,8 +392,12 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     After outputting the tag, write the ENTIRE rest of the response in that chosen language. Translate all labels accordingly.
 
     [TASK]
-    Suggest ONE perfect book (fiction or non-fiction). 
-    Plain text only. No ALL CAPS titles. No Markdown (no asterisks). Do not output language warnings.
+    Suggest ONE perfect, highly-acclaimed book (fiction or non-fiction) based on the TRUE MEANING of the request.
+
+    [STRICT INSTRUCTIONS]
+    1. SEMANTIC CURATION: Interpret the vibe and meaning of the request. If the user asks for "un livre à lire une fois dans sa vie", recommend a timeless literary masterpiece (e.g., '1984', 'Le Petit Prince', 'L'Étranger'). DO NOT just search for a book with the user's exact words in the title.
+    2. NO HALLUCINATIONS: You must recommend a REAL, existing, published book by a REAL author. Do not invent titles or authors.
+    3. FORMATTING: Plain text only. No ALL CAPS titles. No Markdown (no asterisks). Do not use brackets [] in the output.
 
     [OUTPUT STRUCTURE]
     [LANG: XX]
@@ -396,7 +408,7 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """
     
     suggestion = await ask_llm(prompt) 
-    clean_suggestion = suggestion.replace("[LANG: FR]", "").replace("[LANG: EN]", "").strip()
+    clean_suggestion = suggestion.replace("[LANG: FR]", "").replace("[LANG: EN]", "").replace("*", "").strip()
     
     first_line = clean_suggestion.split('\n')[0].strip()
     if first_line and first_line not in history_titles:

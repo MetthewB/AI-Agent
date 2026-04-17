@@ -53,6 +53,15 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     If ambiguous, default to French.
     After outputting the tag, write the ENTIRE rest of the response in that chosen language.
 
+    [TERMINOLOGY & LOCALIZATION]
+    If writing in French, use natural, professional sports terminology. Never translate literally. 
+    You MUST use these specific translations for your headers:
+    - "Workout Plan" = "Plan d'entraînement"
+    - "Recent Training History" = "Historique des derniers entraînements"
+    - "Warm-up" = "Échauffement"
+    - "Main Set" = "Série principale"
+    - "Cool-down" = "Récupération"
+
     [TASK]
     Design a tailored, one-off workout session based on the goal and current fatigue levels.
 
@@ -67,7 +76,7 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     [OUTPUT STRUCTURE]
     [LANG: XX]
-    🏃‍♂️ [Translated 'Workout Plan' in Title Case]
+    🏃‍♂️ [Translated 'Workout Plan']
     ──────────────────────
     📊 [Translated 'Recent Training History']
     • [DD/MM]: [Sport] - [Distance]km - [Duration] mins (Only show distance if > 0)
@@ -83,7 +92,7 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     🧘 [Translated 'Cool-down']
     • [Recovery action]
     """
-    
+
     workout = await ask_llm(prompt)
     clean_workout = workout.replace("[LANG: FR]", "").replace("[LANG: EN]", "").replace("*", "").strip()
     try:
@@ -189,7 +198,18 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [LANGUAGE ANCHORING - CRITICAL]
         You MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
         If ambiguous, default to French.
-        After outputting the tag, write the ENTIRE rest of the response in that chosen language. Translate all headers and sport names accordingly.
+        After outputting the tag, write the ENTIRE rest of the response in that chosen language.
+
+        [TERMINOLOGY & LOCALIZATION]
+        If writing in French, use natural, professional sports terminology. Never translate literally. 
+        You MUST use these specific translations:
+        - "7-day Performance Review" = "Bilan Hebdomadaire"
+        - "Total Workouts" = "Total des séances"
+        - "Total Active Time" = "Temps d'activité total"
+        - "Breakdown by Sport" = "Répartition par sport"
+        - "Run" or "Running" = "Course à pied"
+        - "Workout" or "Weight Training" = "Musculation"
+        - "Coach's Note" = "Note du coach"
 
         [TASK]
         Format the client's weekly stats into a clean summary and add a short, 2-sentence encouraging review at the end based on their mix of sports.
@@ -198,7 +218,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         1. SMART GYM LOGIC: If they did gym/weight training with 0 Coros Load, DO NOT say they were resting. Acknowledge the strength work!
         2. RECOVERY PROTOCOL: If Total Coros Load > 400, strictly advise them to prioritize recovery.
         3. DATA ACCURACY: Do not alter the numbers from the Raw Client Stats. Just format and translate them.
-        4. CASING: Use normal Sentence Case or Title Case for all headers and labels. Do NOT use all caps (NO MAJUSCULES).
+        4. CASING: Use normal Sentence Case or Title Case for all headers and labels. Do NOT use all caps (NO MAJUSCULES). Do not use brackets [] in the output.
         5. PLAIN TEXT ONLY: Absolutely NO HTML tags (no <b>, no <i>).
         6. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). 
         7. EMOJIS: Use emojis tastefully for the headers and the coach's note.
