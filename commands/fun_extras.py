@@ -193,23 +193,28 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [LANGUAGE ANCHORING - CRITICAL]
     Because these instructions are in English, you might accidentally drift into English. 
     To prevent this, you MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
-    If ambiguous, use [LANG: FR].
-    After outputting the tag, write the ENTIRE rest of the response in that chosen language. Translate all labels accordingly.
+    If ambiguous, default to French.
+    After outputting the tag, write the ENTIRE rest of the response (including the pitch) in that chosen language.
+
+    [TERMINOLOGY & LOCALIZATION]
+    If writing in French, use natural, cinematic terminology. You MUST use these specific translations for your labels:
+    - "Genre" = "Genre"
+    - "Pitch" = "Synopsis"
 
     [TASK]
     Suggest ONE perfect movie or series based on the TRUE MEANING of the request. 
 
     [STRICT INSTRUCTIONS]
-    1. SEMANTIC CURATION: Interpret the *vibe*, *plot*, or *meaning* of the request. If the user asks for "un film pour pleurer" (a movie to cry to), recommend a genuinely emotional masterpiece. DO NOT just search for a movie with the user's exact words in the title.
+    1. SEMANTIC CURATION: Interpret the *vibe*, *plot*, or *meaning* of the request. DO NOT just search for a movie with the user's exact words in the title.
     2. NO HALLUCINATIONS: You must recommend a REAL, existing, released movie or TV series. Do not invent titles, directors, or plots.
-    3. FORMATTING: Plain text only. No ALL CAPS titles. No Markdown (no asterisks). Do not use brackets [] in the output.
+    3. FORMATTING: Plain text only. No ALL CAPS titles. No Markdown (no asterisks). Do not use brackets [] for the labels.
 
     [OUTPUT STRUCTURE]
     [LANG: XX]
     🎬 Title (Year)
     [Translated 'Genre' label]: [Value]
     ──────────────────────
-    [Translated 'Pitch' label]: [1-2 sentence pitch]
+    [Translated 'Pitch' label]: [1-2 sentence synopsis in the correct language]
     """
     
     suggestion = await ask_llm(prompt) 
@@ -291,23 +296,28 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [LANGUAGE ANCHORING - CRITICAL]
     Because these instructions are in English, you might accidentally drift into English. 
     To prevent this, you MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
-    If ambiguous, use [LANG: EN].
-    After outputting the tag, write the ENTIRE rest of the response in that chosen language. Translate all labels accordingly.
+    If ambiguous, default to French.
+    After outputting the tag, write the ENTIRE rest of the response (including the pitch) in that chosen language.
+
+    [TERMINOLOGY & LOCALIZATION]
+    If writing in French, use natural, expressive terminology. You MUST use these specific translations for your labels:
+    - "Genre" = "Genre" (or "Style")
+    - "Pitch/Vibe" = "Ambiance"
 
     [TASK]
     Suggest ONE perfect song, album, or playlist based on the TRUE MEANING of the request.
 
     [STRICT INSTRUCTIONS]
-    1. SEMANTIC CURATION: Interpret the *vibe*, *activity*, or *meaning* of the request. If the user asks for "musique pour pleurer" (music to cry to), recommend a genuinely emotional masterpiece. DO NOT just search for a song with the user's exact words in the title.
+    1. SEMANTIC CURATION: Interpret the *vibe*, *activity*, or *meaning* of the request. DO NOT just search for a song with the user's exact words in the title.
     2. NO HALLUCINATIONS: You must recommend a REAL, existing, published track or album by a REAL artist. Do not invent titles or artists.
-    3. FORMATTING: Plain text only. No ALL CAPS titles. No Markdown (no asterisks). Do not use brackets [] in the output.
+    3. FORMATTING: Plain text only. No ALL CAPS titles. No Markdown (no asterisks). Do not use brackets [] for the labels.
 
     [OUTPUT STRUCTURE]
     [LANG: XX]
     ♫ Title by Artist
     [Translated 'Genre' label]: [Value]
     ──────────────────────
-    [Translated 'Pitch/Vibe' label]: [1-2 sentence pitch]
+    [Translated 'Pitch/Vibe' label]: [1-2 sentence pitch in the correct language]
     """
     
     suggestion = await ask_llm(prompt) 
