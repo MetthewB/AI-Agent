@@ -186,7 +186,7 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [LANG: XX]
     🎬 Title (Year)
     [Translated 'Genre' label]: [Value]
-
+    ──────────────────────
     [Translated 'Pitch' label]: [1-2 sentence pitch]
     """
     
@@ -280,7 +280,7 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [LANG: XX]
     ♫ Title by Artist
     [Translated 'Genre' label]: [Value]
-
+    ──────────────────────
     [Translated 'Pitch/Vibe' label]: [1-2 sentence pitch]
     """
     
@@ -373,7 +373,7 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [LANG: XX]
     📖 Title by Author (Year)
     [Translated 'Genre' label]: [Value]
-    
+    ──────────────────────
     [Translated 'Pitch' label]: [1-2 sentence pitch]
     """
     

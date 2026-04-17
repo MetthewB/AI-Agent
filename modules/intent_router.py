@@ -14,7 +14,7 @@ from modules.utils import is_authorized
 
 from commands.finance_news import portfolio_command, news_command
 from commands.knowledge_util import research_command, weather_command, remind_command
-from commands.shared_life import grocery_command, grocery_remove_command, recipe_command
+from commands.shared_life import grocery_command, grocery_remove_command, recipe_command, decide_command
 from commands.health_fitness import train_command, stats_command
 from commands.fun_extras import movie_command, music_command, book_command, cat_command, dateidea_command
 
@@ -23,10 +23,10 @@ logger = logging.getLogger(__name__)
 # ==========================================
 # The Natural Language Understanding Brain
 # ==========================================
-async def parse_intent(user_text: str) -> dict:
+async def parse_intent(user_text: str) -> list:
     """
-    Analyzes raw text to determine which bot function to trigger.
-    Returns a dictionary with 'action' and 'data'.
+    Analyzes raw text to determine which bot functions to trigger.
+    Returns a LIST of dictionaries with 'action' and 'data'.
     """
     prompt = f"""
     [ROLE]
@@ -34,10 +34,11 @@ async def parse_intent(user_text: str) -> dict:
     Your job is to decipher user intent, extract necessary parameters, and map them to strict system actions.
 
     [CORE RULES]
-    1. TYPO TOLERANCE: Users type fast on mobile. Aggressively autocorrect intent in your mind (e.g., "portgolio" = portfolio, "weathr" = weather, "switzerkland" = switzerland).
+    1. TYPO TOLERANCE: Aggressively autocorrect intent in your mind.
     2. SEMANTIC MATCHING: Look for the *meaning* behind the words, not just exact keywords.
-    3. MEDIA VS RESEARCH: If the user is asking for something to watch, read, or listen to, ALWAYS route to movie, book, or music. Only use 'research' if they want factual data, history, or news summaries.
-    4. THE "CHAT" FALLBACK: Only use the "chat" action if the message is purely conversational (e.g., "Hello," "How are you?"). 
+    3. MEDIA VS RESEARCH: If asking for something to watch, read, or listen to, ALWAYS route to movie, book, or music.
+    4. THE "CHAT" FALLBACK: Only use the "chat" action if the message is purely conversational.
+    5. COMPOUND INTENTS: If the user asks to do multiple distinct things (e.g., "ajoute beurre et enlève yaourt" or "météo Paris et ajoute lait"), you MUST break them down into MULTIPLE objects in the JSON array.
 
     [ACTION DICTIONARY]
     Format -> action_name: [Trigger description] -> Data Payload
@@ -47,43 +48,46 @@ async def parse_intent(user_text: str) -> dict:
     - grocery_remove: User wants to remove/delete/cross off an item. -> data: "the specific item"
     - grocery_list: User wants to see/read the current shopping list. -> data: ""
     - recipe: User wants cooking ideas or recipes based on items. -> data: "the ingredients"
+    - decide: User wants to settle a debate or randomly choose between multiple options (e.g., "decide tacos pizza", "A or B?"). -> data: "the options provided"
 
     --- DATA & INFO ---
-    - weather: User asks about temperature, sun, rain, or forecasts. -> data: "city name" (leave empty if no city mentioned)
-    - portfolio: User asks about stocks, markets, investments, or "portfolio" (and typos). -> data: ""
-    - news: User asks for global news, geopolitics, or headlines. -> data: ""
-    - research: User asks for factual deep dives, history, or status updates (e.g., "job market in switzerland", "history of Rome"). -> data: "the topic"
+    - weather: User asks about temperature or forecasts. -> data: "city name"
+    - portfolio: User asks about stocks, markets, investments. -> data: ""
+    - news: User asks for global news, geopolitics. -> data: ""
+    - research: User asks for factual deep dives or status updates. -> data: "the topic"
 
     --- HEALTH & LIFESTYLE ---
-    - train: User wants a workout, run, or training plan. -> data: "sport and details"
-    - stats: User wants to see their Strava, weekly performance, or recent workouts. -> data: ""
+    - train: User wants a workout or training plan. -> data: "sport and details"
+    - stats: User wants to see their Strava or workouts. -> data: ""
     - dateidea: User wants a romantic plan or date idea. -> data: "city name"
 
     --- UTILITIES & FUN ---
-    - remind: User wants a timer, alarm, or reminder. -> data: "time + message" (e.g., "15m flip the laundry")
-    - cat: User wants a cat gif or feline dopamine. -> data: ""
-    - music: User wants a song, album, artist, or playlist recommendation. -> data: "the vibe, genre, or activity"
-    - movie: User wants a recommendation for a movie, film, TV show, TV series, anime, or asks "what to watch". -> data: "the genre, vibe, actors, or specific constraints"
-    - book: User wants a recommendation for a book, novel, audiobook, manga, or author. -> data: "the topic, genre, or vibe"
+    - remind: User wants a timer or reminder. -> data: "time + message"
+    - cat: User wants a cat gif. -> data: ""
+    - music: User wants a song or playlist recommendation. -> data: "the vibe or genre"
+    - movie: User wants a movie or series recommendation. -> data: "the genre or vibe"
+    - book: User wants a book or novel recommendation. -> data: "the topic or vibe"
     
     --- FALLBACK ---
-    - chat: General greetings, conversational replies, or abstract questions not fitting above. -> data: "the original user text"
+    - chat: General greetings or abstract questions. -> data: "the original user text"
 
     [USER MESSAGE]
     "{user_text}"
 
     [OUTPUT STRICT FORMAT]
-    You must output ONLY a valid JSON object. No explanations, no markdown blocks.
-    {{"action": "exact_action_name", "data": "extracted_string"}}
+    You must output ONLY a valid JSON array of objects. No explanations.
+    [
+      {{"action": "exact_action_name", "data": "extracted_string"}}
+    ]
     """
     
     response = await ask_llm(prompt)
     try:
-        clean_json = re.search(r'\{.*\}', response, re.DOTALL).group()
+        clean_json = re.search(r'\[.*\]', response, re.DOTALL).group()
         return json.loads(clean_json)
     except Exception as e:
         logger.error(f"Intent Parse Error: {e} - Raw: {response}")
-        return {"action": "chat", "data": user_text}
+        return [{"action": "chat", "data": user_text}]
 
 
 # ==========================================
@@ -96,89 +100,90 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     if not user_text: return
 
-    # 1. Ask the Brain what the user wants
-    intent = await parse_intent(user_text)
-    action = intent.get("action")
-    data = intent.get("data", "")
+    intents = await parse_intent(user_text)
 
-    logger.info(f"🧠 NLU Intent Detected: {action} | Data: {data}")
+    for intent in intents:
+        action = intent.get("action")
+        data = intent.get("data", "")
 
-    # 2. Route to the correct existing command
-    if action == "grocery_add":
-        context.args = [data]
-        await grocery_command(update, context)
-        
-    elif action == "grocery_remove":
-        context.args = [data]
-        await grocery_remove_command(update, context)
-        
-    elif action == "grocery_list":
-        context.args = []
-        await grocery_command(update, context)
+        logger.info(f"🧠 NLU Intent Detected: {action} | Data: {data}")
 
-    elif action == "movie":
-        context.args = data.split()
-        await movie_command(update, context)
-
-    elif action == "music":
-        context.args = data.split()
-        await music_command(update, context)
-
-    elif action == "book":
-        context.args = data.split()
-        await book_command(update, context)
-        
-    elif action == "weather":
-        context.args = [data]
-        await weather_command(update, context)
-        
-    elif action == "train":
-        context.args = [data]
-        await train_command(update, context)
-        
-    elif action == "portfolio":
-        await portfolio_command(update, context)
-        
-    elif action == "news":
-        await news_command(update, context)
-        
-    elif action == "cat":
-        await cat_command(update, context)
-        
-    elif action == "stats":
-        await stats_command(update, context)
-        
-    elif action == "recipe":
-        context.args = data.split()
-        await recipe_command(update, context)
-        
-    elif action == "research":
-        context.args = [data]
-        await research_command(update, context)
-        
-    elif action == "dateidea":
-        context.args = [data]
-        await dateidea_command(update, context)
-        
-    elif action == "remind":
-        context.args = data.split(" ", 1)
-        await remind_command(update, context)
-
-    elif action == "chat":
-        status_msg = await update.message.reply_text("<i>Thinking...</i>", parse_mode=ParseMode.HTML)
-        
-        try:
-            response = await ask_llm(user_text)
+        if action == "grocery_add":
+            context.args = [data]
+            await grocery_command(update, context)
             
-            if not response:
-                await status_msg.edit_text("⚠️ The AI didn't return an answer. Is the API down?")
-            else:
-                clean_response = response.replace("*", "").replace("#", "")
-                await status_msg.edit_text(clean_response)
-                
-        except Exception as e:
-            logger.error(f"❌ General Chat Error: {e}")
-            await status_msg.edit_text(f"❌ My brain is foggy: {str(e)}")
+        elif action == "grocery_remove":
+            context.args = [data]
+            await grocery_remove_command(update, context)
+            
+        elif action == "grocery_list":
+            context.args = []
+            await grocery_command(update, context)
+
+        elif action == "movie":
+            context.args = data.split()
+            await movie_command(update, context)
+
+        elif action == "music":
+            context.args = data.split()
+            await music_command(update, context)
+
+        elif action == "book":
+            context.args = data.split()
+            await book_command(update, context)
+            
+        elif action == "weather":
+            context.args = [data]
+            await weather_command(update, context)
+            
+        elif action == "train":
+            context.args = [data]
+            await train_command(update, context)
+            
+        elif action == "portfolio":
+            await portfolio_command(update, context)
+            
+        elif action == "news":
+            await news_command(update, context)
+            
+        elif action == "cat":
+            await cat_command(update, context)
+            
+        elif action == "stats":
+            await stats_command(update, context)
+
+        elif action == "decide":
+            context.args = data.split()
+            await decide_command(update, context)
+            
+        elif action == "recipe":
+            context.args = data.split()
+            await recipe_command(update, context)
+            
+        elif action == "research":
+            context.args = [data]
+            await research_command(update, context)
+            
+        elif action == "dateidea":
+            context.args = [data]
+            await dateidea_command(update, context)
+            
+        elif action == "remind":
+            context.args = data.split(" ", 1)
+            await remind_command(update, context)
+
+        elif action == "chat":
+            status_msg = await update.message.reply_text("<i>Thinking...</i>", parse_mode=ParseMode.HTML)
+            try:
+                response = await ask_llm(user_text)
+                if not response:
+                    await status_msg.edit_text("⚠️ The AI didn't return an answer. Is the API down?")
+                else:
+                    clean_response = response.replace("*", "").replace("#", "")
+                    await status_msg.edit_text(clean_response)
+            except Exception as e:
+                logger.error(f"❌ General Chat Error: {e}")
+                await status_msg.edit_text(f"❌ My brain is foggy: {str(e)}")
 
 
 # ==========================================
@@ -192,11 +197,9 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await update.message.reply_text("🗣️ <i>Listening...</i>", parse_mode=ParseMode.HTML)
 
     try:
-        # 1. Download the voice note
         voice_file = await update.message.voice.get_file()
         audio_bytes = await voice_file.download_as_bytearray()
 
-        # 2. Transcribe using Whisper
         API_URL = "https://router.huggingface.co/hf-inference/models/openai/whisper-large-v3-turbo"
         headers = {
             "Authorization": f"Bearer {HF_TOKEN}",
@@ -223,7 +226,6 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
 
-        # 3. Route intent using the LLM (Voice can trigger MULTIPLE commands!)
         prompt = f"""
         You are a strict, highly logical API router. 
         Read this transcribed voice message: "{transcription}"
@@ -240,6 +242,7 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         - weather: args = ["city"] 
         - news: args = [] 
         - portfolio: args = [] 
+        - decide: args = ["option1", "option2"]
         - recipe: args = ["ingredient1 ingredient2"] 
         - grocery: args = [] (to view list) OR args = ["item"] (to add)
         - grocery_remove: args = ["item"]
@@ -281,12 +284,12 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         await status_msg.delete()
         
-        # Map strings to your actual Python functions
         command_map = {
             "train": train_command,
             "weather": weather_command,
             "news": news_command,
             "portfolio": portfolio_command,
+            "decide": decide_command,
             "recipe": recipe_command,
             "grocery": grocery_command,
             "grocery_remove": grocery_remove_command,
@@ -300,7 +303,6 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "remind": remind_command
         }
 
-        # 4. Execute the commands
         for cmd in commands_to_run:
             cmd_name = cmd.get("command", "").replace("/", "")
             args = cmd.get("args", [])
