@@ -18,7 +18,8 @@ logger = logging.getLogger(__name__)
 # FINANCE & NEWS COMMANDS
 # ==========================================
 async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update): return
+    """Fetches live market data and returns a summary for global memory."""
+    if not is_authorized(update): return None
     logger.info(f"▶️ User {update.effective_chat.id} triggered /portfolio")
     
     status_msg = await update.message.reply_text("📈 <i>Fetching live market data...</i>", parse_mode=ParseMode.HTML)
@@ -43,12 +44,16 @@ async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"❌ Portfolio Error for {ticker}: {e}")
             stats.append(f"• <b>{html.escape(name)}</b>:\n  <code>⚠️ Fetch failed</code>")
     
-    header = "📊 <b>Live Market Portfolio</b>\n━━━━━━━━━━━━━━━━━━━\n"
+    header = "📊 <b>Live Market Portfolio</b>\n──────────────────────\n"
     body = "\n".join(stats)
-    await status_msg.edit_text(f"{header}{body}", parse_mode=ParseMode.HTML)
+    full_response = f"{header}{body}"
+    
+    await status_msg.edit_text(full_response, parse_mode=ParseMode.HTML)
+    return f"Portfolio Status: {', '.join([s.split('</b>')[0].replace('• <b>', '') for s in stats[:3]])}..."
 
 async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update): return
+    """Synthesizes news and returns the executive summary for memory."""
+    if not is_authorized(update): return None
     logger.info(f"▶️ User {update.effective_chat.id} triggered /news")
     
     status_msg = await update.message.reply_text("<i>Analyzing global headlines...</i> ⏳", parse_mode=ParseMode.HTML)
@@ -66,31 +71,42 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         news_context = "\n".join(raw_news)
         prompt = f"""
         [ROLE]
-        You are a highly analytical Geopolitical Briefing Officer. Your task is to provide a high-level executive summary of current events for a VIP client.
+        You are a highly analytical Geopolitical Briefing Officer.
 
         [CONTEXT]
-        Raw headlines from international, Swiss, and French sources (Last 24h):
+        Raw headlines (Last 24h):
         {news_context}
+        
+        [LANGUAGE ANCHORING - CRITICAL]
+        You MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
+        If ambiguous, default to French.
+        After outputting the tag, write the ENTIRE rest of the response in that chosen language.
 
         [TASK]
         Synthesize the headlines into a single, natural, and cohesive paragraph connecting the dots between events.
 
         [STRICT INSTRUCTIONS]
-        1. OBJECTIVITY: Maintain a neutral, journalistic tone. No personal opinions.
+        1. OBJECTIVITY: Neutral, journalistic tone. No personal opinions.
         2. NO HALLUCINATION: If headlines are missing for a region, focus only on the data available.
-        3. PLAIN TEXT ONLY: Absolutely NO HTML tags (no <b>, <i>, etc.).
-        4. NO MARKDOWN: Strictly avoid all asterisks (*) and hashtags (#). Use ALL CAPS for emphasis if absolutely necessary.
-        5. LANGUAGE: Adhere strictly to the language preference requested.
-        6. EMOJIS: Include exactly 2 relevant emojis at the end of the text.
+        3. FORMATTING: Plain text only. No ALL CAPS titles. No Markdown (no asterisks).
+        4. EMOJIS: Include exactly 2 relevant emojis at the end.
 
         [OUTPUT STRUCTURE]
-        A single paragraph of 4-6 sentences. Start directly with the briefing—no introductory pleasantries.
+        [LANG: XX]
+        [A single paragraph of 4-6 sentences briefing the client.]
         """
         
-        prompt += get_lang_rule(context)
         summary = await ask_llm(prompt)
-        safe_summary = html.escape(summary.replace('*', ''))
-        await status_msg.edit_text(f"📰 <b>Geopolitical Briefing</b>\n──────────────────────\n{safe_summary}", parse_mode=ParseMode.HTML)
+        clean_summary = summary.replace("[LANG: FR]", "").replace("[LANG: EN]", "").replace("*", "").strip()
+        
+        pref = context.user_data.get('lang', 'fr')
+        header_text = "Bilan Géopolitique" if pref == 'fr' else "Geopolitical Briefing"
+        
+        final_text = f"📰 <b>{header_text}</b>\n──────────────────────\n{clean_summary}"
+        await status_msg.edit_text(final_text, parse_mode=ParseMode.HTML)
+        return clean_summary
+
     except Exception as e:
         logger.error(f"❌ News Error: {e}")
         await status_msg.edit_text(f"⚠️ News summary failed: {str(e)}")
+        return None

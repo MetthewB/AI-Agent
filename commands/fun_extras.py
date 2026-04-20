@@ -10,7 +10,7 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
 from modules.ai_core import ask_llm
-from modules.utils import get_lang_rule, is_authorized 
+from modules.utils import is_authorized 
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 # FUN & EXTRAS COMMANDS
 # ==========================================
 async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update): return
+    if not is_authorized(update): return None
     
     query = update.callback_query
     if query:
@@ -101,12 +101,14 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         await status_msg.edit_text(f"✨ {clean_idea}", reply_markup=reply_markup)
+        return clean_idea
     except Exception as e:
         logger.error(f"❌ Date Idea Display Error: {e}")
         await status_msg.edit_text(f"⚠️ Erreur: {str(e)}")
+        return None
 
 async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update): return
+    if not is_authorized(update): return None
     
     query = update.callback_query
     if query:
@@ -135,7 +137,7 @@ async def cat_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_message.reply_text("The cats are sleeping. 😴")
 
 async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update): return
+    if not is_authorized(update): return None
     
     query = update.callback_query
     if query:
@@ -155,7 +157,7 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• <code>/movie film d'animation avec un chat</code>"
         )
         await update.effective_message.reply_text(usage_text, parse_mode=ParseMode.HTML)
-        return
+        return None
 
     safe_keywords = html.escape(keywords)
     status_text = f"🍿 <i>Searching for / Recherche de '{safe_keywords}'...</i>"
@@ -193,7 +195,7 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [LANGUAGE ANCHORING - CRITICAL]
     Because these instructions are in English, you might accidentally drift into English. 
     To prevent this, you MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
-    If ambiguous, default to French.
+    If ambiguous, use [LANG: EN].
     After outputting the tag, write the ENTIRE rest of the response (including the pitch) in that chosen language.
 
     [TERMINOLOGY & LOCALIZATION]
@@ -232,12 +234,14 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         await status_msg.edit_text(clean_suggestion, reply_markup=reply_markup)
+        return clean_suggestion
     except Exception as e:
         logger.error(f"❌ Movie Display Error: {e}")
         await status_msg.edit_text(f"⚠️ Erreur: {str(e)}")
+        return None
 
 async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update): return
+    if not is_authorized(update): return None
     
     query = update.callback_query
     if query:
@@ -257,7 +261,7 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• <code>/music playlist de musculation</code>"
         )
         await update.effective_message.reply_text(usage_text, parse_mode=ParseMode.HTML)
-        return
+        return None
 
     safe_keywords = html.escape(keywords)
     
@@ -296,7 +300,7 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [LANGUAGE ANCHORING - CRITICAL]
     Because these instructions are in English, you might accidentally drift into English. 
     To prevent this, you MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
-    If ambiguous, default to French.
+    If ambiguous, use [LANG: EN].
     After outputting the tag, write the ENTIRE rest of the response (including the pitch) in that chosen language.
 
     [TERMINOLOGY & LOCALIZATION]
@@ -335,12 +339,14 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         await status_msg.edit_text(clean_suggestion, reply_markup=reply_markup)
+        return clean_suggestion
     except Exception as e:
         logger.error(f"❌ Music Display Error: {e}")
         await status_msg.edit_text(f"⚠️ Track suggestion failed: {str(e)}")
+        return None
 
 async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update): return
+    if not is_authorized(update): return None
     
     query = update.callback_query
     if query:
@@ -360,7 +366,7 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "• <code>/book livre de philosophie</code>"
         )
         await update.effective_message.reply_text(usage_text, parse_mode=ParseMode.HTML)
-        return
+        return None
 
     safe_keywords = html.escape(keywords)
     status_text = f"📚 <i>Searching for / Recherche de '{safe_keywords}'...</i>"
@@ -432,6 +438,8 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         await status_msg.edit_text(clean_suggestion, reply_markup=reply_markup)
+        return clean_suggestion
     except Exception as e:
         logger.error(f"❌ Book Display Error: {e}")
         await status_msg.edit_text(f"⚠️ Book suggestion failed: {str(e)}")
+        return None

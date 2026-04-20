@@ -20,6 +20,23 @@ from commands.fun_extras import movie_command, music_command, book_command, cat_
 
 logger = logging.getLogger(__name__)
 
+
+# ==========================================
+# Helper Functions
+# ==========================================
+def log_interaction(context, user_input, bot_output):
+    """Saves an interaction to the sliding window memory."""
+    if 'chat_history' not in context.user_data:
+        context.user_data['chat_history'] = []
+    
+    # Format the entry
+    context.user_data['chat_history'].append(f"User: {user_input}")
+    context.user_data['chat_history'].append(f"MattouBot: {bot_output}")
+    
+    # Keep only the last 6 lines (3 full interactions)
+    if len(context.user_data['chat_history']) > 6:
+        context.user_data['chat_history'] = context.user_data['chat_history'][-6:]
+
 # ==========================================
 # The Natural Language Understanding Brain
 # ==========================================

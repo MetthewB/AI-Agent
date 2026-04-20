@@ -13,44 +13,55 @@ logger = logging.getLogger(__name__)
 # ==========================================
 def is_authorized(update: Update) -> bool:
     """Checks if the user is in the authorized VIP list."""
+    if not update.effective_chat:
+        return False
     chat_id = update.effective_chat.id
     if chat_id in AUTHORIZED_USERS:
         return True
-    logger.warning(f"🛑 UNAUTHORIZED ACCESS ATTEMPT from ID: {chat_id}")
+    
+    user_name = update.effective_user.first_name if update.effective_user else "Unknown"
+    logger.warning(f"🛑 UNAUTHORIZED ACCESS ATTEMPT: {user_name} (ID: {chat_id})")
     return False
 
 def get_lang_rule(context: ContextTypes.DEFAULT_TYPE) -> str:
-    """Injects a strict language rule based on the user's latest voice command."""
+    """Injects a strict language rule based on the user's latest preference."""
     pref = context.user_data.get('lang', 'en')
     lang_str = "French" if pref == "fr" else "English"
     return (
-        f"\n\nCRITICAL LANGUAGE RULE:\n"
+        f"\n\n[CRITICAL LANGUAGE RULE]\n"
         f"- You MUST write your ENTIRE response in {lang_str}.\n"
-        f"- ABSOLUTE BAN: If the user's prompt is in Spanish, German, Italian, or ANY language other than English or French, you MUST NOT fulfill the request. "
-        f"You must ABORT the task and reply EXACTLY and ONLY with the phrase: '⚠️ I only speak English and French!'"
+        f"- BILINGUAL CONTEXT: If the user speaks a language OTHER than English or French, you must ABORT and reply: '⚠️ I only speak English and French!'"
     )
 
 def parse_time_string(time_str: str) -> int:
-    """Parses strings like '10', '1.5h', '90m', '45s' into total seconds."""
-    time_str = time_str.lower().strip()
+    """
+    Robustly parses strings like '10', '1.5h', '90m', '45s' into total seconds.
+    Supports combined formats like '1h30m'.
+    """
+    time_str = time_str.lower().strip().replace(' ', '')
     
-    if time_str.replace('.', '', 1).isdigit():
-        return int(float(time_str) * 60)
-        
-    if re.match(r'^\d+(\.\d+)?h\d+$', time_str):
-        time_str += 'm'
+    if time_str.isdigit():
+        return int(time_str) * 60
         
     total_seconds = 0
-    matches = re.findall(r'([\d\.]+)([hms])', time_str)
+    patterns = {
+        'h': 3600,
+        'm': 60,
+        's': 1
+    }
     
-    if not matches:
-        raise ValueError("Could not parse time format.")
-        
-    for amount, unit in matches:
-        val = float(amount)
-        if unit == 'h': total_seconds += val * 3600
-        elif unit == 'm': total_seconds += val * 60
-        elif unit == 's': total_seconds += val
+    found_any = False
+    for unit, multiplier in patterns.items():
+        match = re.search(r'([\d\.]+)' + unit, time_str)
+        if match:
+            total_seconds += float(match.group(1)) * multiplier
+            found_any = True
+            
+    if not found_any:
+        try:
+            return int(float(time_str) * 60)
+        except ValueError:
+            raise ValueError(f"Invalid time format: {time_str}")
         
     return int(total_seconds)
 
@@ -59,10 +70,11 @@ def parse_time_string(time_str: str) -> int:
 # GENERAL & HELP COMMANDS
 # ==========================================
 async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update): return
+    """The landing page of the bot. Returns the text for memory logging."""
+    if not is_authorized(update): return None
     logger.info(f"▶️ User {update.effective_chat.id} triggered /start")
     
-    welcome = (
+    welcome_text = (
         "<b>Hello! I am MattouBot, meow.</b> 🐾\n\n"
         "Here is what I can do for you:\n\n"
         "<b>📈 Finance & News</b>\n"
@@ -89,8 +101,10 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "• /music [topic] - Recommend a song/album/playlist\n"
         "• /book [topic] - Recommend a book/novel"
     )
-    await update.message.reply_text(welcome, parse_mode=ParseMode.HTML)
+    
+    await update.message.reply_text(welcome_text, parse_mode=ParseMode.HTML)
+    return "Displayed the help menu and command list."
 
 async def error_handler(update: object, context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Log the error and send a telegram message to notify the developer."""
+    """Log the error for the developer."""
     logger.error(f"❌ Telegram API Error: {context.error}")

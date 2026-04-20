@@ -1,5 +1,4 @@
 import re
-import html
 import time
 import asyncio
 import logging
@@ -11,7 +10,7 @@ from telegram.constants import ParseMode
 
 from modules.ai_core import ask_llm
 from modules.strava_api import get_recent_strava_activities, get_strava_access_token
-from modules.utils import get_lang_rule, is_authorized 
+from modules.utils import is_authorized 
 
 logger = logging.getLogger(__name__)
 
@@ -19,24 +18,21 @@ logger = logging.getLogger(__name__)
 # HEALTH & FITNESS COMMANDS
 # ==========================================
 async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update): return
+    if not is_authorized(update): return None
     logger.info(f"▶️ User {update.effective_chat.id} triggered /train")
     
     request_details = " ".join(context.args)
     if not request_details:
-        await update.message.reply_text(
+        usage = (
             "⚠️ <b>Usage:</b> /train [Sport] [Specifications]\n"
-            "<i>Examples:</i>\n"
-            "• /train running easy 5k\n"
-            "• /train gym push day hypertrophy\n"
-            "• /train swimming sprint intervals", 
-            parse_mode=ParseMode.HTML
+            "<i>Example: /train running easy 5k</i>"
         )
-        return
+        await update.message.reply_text(usage, parse_mode=ParseMode.HTML)
+        return None
         
     status_msg = await update.message.reply_text("🏃‍♂️ <i>Syncing with Strava and designing your workout...</i>", parse_mode=ParseMode.HTML)
     history_text = await get_recent_strava_activities(limit=5)
-    current_date = datetime.datetime.now().strftime("%Y-%m-%d")
+    current_date = datetime.datetime.now().strftime("%A, %B %d, %Y")
     
     prompt = f"""
     [ROLE]
@@ -54,10 +50,10 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     After outputting the tag, write the ENTIRE rest of the response in that chosen language.
 
     [TERMINOLOGY & LOCALIZATION]
-    If writing in French, use natural, professional sports terminology. Never translate literally. 
+    If writing in French, use natural, professional sports terminology.
     You MUST use these specific translations for your headers:
     - "Workout Plan" = "Plan d'entraînement"
-    - "Recent Training History" = "Historique des derniers entraînements"
+    - "Recent Training History" = "Historique récent"
     - "Warm-up" = "Échauffement"
     - "Main Set" = "Série principale"
     - "Cool-down" = "Récupération"
@@ -66,57 +62,53 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     Design a tailored, one-off workout session based on the goal and current fatigue levels.
 
     [STRICT INSTRUCTIONS]
-    1. FATIGUE ANALYSIS: Distinguish between sports.
-    2. FORMATTING: Use normal Sentence Case or Title Case. Do NOT use all caps (NO MAJUSCULES). Do not use brackets [] in the output.
-    3. PACE INTELLIGENCE: 
-       - RUNNING: Calculate baseline pace (min/km). Prescribe a target pace in min/km.
-       - SWIMMING: Prescribe pace in min/100m.
-    4. PLAIN TEXT ONLY: Absolutely NO Markdown (no asterisks *, no hashtags #). 
-    5. EMOJIS: Use exactly 3 emojis total, integrated naturally.
+    1. FATIGUE ANALYSIS: If the Strava history shows a heavy session yesterday, suggest a recovery-focused or complementary workout.
+    2. FORMATTING: Use Normal Sentence Case or Title Case for headers. Do NOT use all caps (NO MAJUSCULES). 
+    3. PLAIN TEXT ONLY: No HTML. No Markdown (no asterisks).
+    4. PACE INTELLIGENCE: Prescribe specific target paces (min/km for run, min/100m for swim).
+    5. EMOJIS: Use exactly 3 emojis total.
 
     [OUTPUT STRUCTURE]
     [LANG: XX]
     🏃‍♂️ [Translated 'Workout Plan']
     ──────────────────────
     📊 [Translated 'Recent Training History']
-    • [DD/MM]: [Sport] - [Distance]km - [Duration] mins (Only show distance if > 0)
+    • [History Summary]
 
     🎯 [Catchy Workout Title]
 
     🔥 [Translated 'Warm-up']
-    • [Drill/distance]
+    • [Details]
 
     ⚡ [Translated 'Main Set']
-    • [Core workout]
+    • [Details]
 
     🧘 [Translated 'Cool-down']
-    • [Recovery action]
+    • [Details]
     """
 
     workout = await ask_llm(prompt)
     clean_workout = workout.replace("[LANG: FR]", "").replace("[LANG: EN]", "").replace("*", "").strip()
     try:
         await status_msg.edit_text(clean_workout)
+        return clean_workout
     except Exception as e:
         logger.error(f"❌ Train Display Error: {e}")
-        await status_msg.edit_text(f"⚠️ Erreur: {str(e)}")
+        await status_msg.edit_text(f"⚠️ Workout generated, but display failed. Check logs.")
+        return clean_workout
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not is_authorized(update): return
+    if not is_authorized(update): return None
     logger.info(f"▶️ User {update.effective_chat.id} triggered /stats")
     
-    user_request = " ".join(context.args)
-    if not user_request and update.message and update.message.text:
-        user_request = update.message.text
-    if not user_request:
-        user_request = "Weekly stats"
+    user_request = " ".join(context.args) or "Weekly performance review"
 
-    status_msg = await update.message.reply_text("📊 <i>Crunching your weekly numbers...</i>", parse_mode=ParseMode.HTML)
+    status_msg = await update.message.reply_text("📊 <i>Accessing Strava vault...</i>", parse_mode=ParseMode.HTML)
     
     access_token = await get_strava_access_token()
     if not access_token:
-        await status_msg.edit_text("⚠️ <i>Could not connect to Strava / Impossible de se connecter à Strava.</i>", parse_mode=ParseMode.HTML)
-        return
+        await status_msg.edit_text("⚠️ <i>Could not connect to Strava. Check your API credentials.</i>", parse_mode=ParseMode.HTML)
+        return None
 
     seven_days_ago = int(time.time()) - (7 * 24 * 3600)
     url = f"https://www.strava.com/api/v3/athlete/activities?after={seven_days_ago}&per_page=30"
@@ -127,84 +119,60 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         activities = res.json()
         
         if not activities:
-            await status_msg.edit_text("📊 <b>Weekly Stats</b>\n\nYou haven't logged any activities in the last 7 days. Time to get moving! / Aucune activité ces 7 derniers jours. Il est temps de bouger ! 🏃‍♂️💨", parse_mode=ParseMode.HTML)
-            return
+            msg = "📊 No activities logged in the last 7 days. Time to get started!"
+            await status_msg.edit_text(msg)
+            return msg
         
-        logger.info(f"🚀 Triggering background PostgreSQL sync for {len(activities)} weekly activities...")
-        from modules.strava_api import sync_activities_to_db
-        await sync_activities_to_db(activities)
+        try:
+            from modules.strava_api import sync_activities_to_db
+            await sync_activities_to_db(activities)
+        except ImportError:
+            pass
             
-        total_time = 0
-        total_load = 0
-        activity_count = len(activities)
+        total_time, total_load, activity_count = 0, 0, len(activities)
         sport_stats = {}
         
         for act in activities:
             sport = act.get('sport_type', 'Activity')
             dist_km = act.get('distance', 0) / 1000
             time_min = act.get('moving_time', 0) / 60
-            
-            desc = act.get('description', '') or ''
+
             act_load = 0
-            if "charge d'entraînement" in desc:
-                match = re.search(r'(\d+)\s*charge', desc)
-                if match: act_load = int(match.group(1))
+            desc = act.get('description', '') or ''
+            load_match = re.search(r'(\d+)\s*charge', desc.lower())
+            if load_match: act_load = int(load_match.group(1))
 
             total_time += time_min
             total_load += act_load
             
             if sport not in sport_stats:
                 sport_stats[sport] = {'count': 0, 'distance': 0, 'time': 0, 'load': 0}
-                
             sport_stats[sport]['count'] += 1
             sport_stats[sport]['distance'] += dist_km
             sport_stats[sport]['time'] += time_min
             sport_stats[sport]['load'] += act_load
 
-        hrs = int(total_time // 60)
-        mins = int(total_time % 60)
-        
-        stats_lines = [
-            f"Total Workouts: {activity_count}",
-            f"Total Active Time: {hrs}h {mins}m"
-        ]
-        if total_load > 0:
-            stats_lines.append(f"Total Coros Load: {total_load}")
-            
-        stats_lines.append("\nBreakdown by Sport:")
+        hrs, mins = int(total_time // 60), int(total_time % 60)
+        raw_stats_summary = f"Activities: {activity_count} | Time: {hrs}h {mins}m | Load: {total_load}\n"
         for sport, data in sport_stats.items():
-            s_hrs = int(data['time'] // 60)
-            s_mins = int(data['time'] % 60)
-            time_str = f"{s_hrs}h {s_mins}m" if s_hrs > 0 else f"{s_mins}m"
-            
-            line = f"- {sport}: {data['count']} session(s) | {time_str}"
-            if data['distance'] > 0:
-                line += f" | {data['distance']:.1f} km"
-            if data['load'] > 0:
-                line += f" | Load: {data['load']}"
-            stats_lines.append(line)
-            
-        raw_stats_text = "\n".join(stats_lines)
-        
+            raw_stats_summary += f"- {sport}: {data['count']} sessions, {data['distance']:.1f}km\n"
+
         prompt = f"""
         [ROLE]
-        You are an elite personal trainer. 
+        You are an elite personal trainer and coach. 
 
         [CONTEXT]
         User Request: "{user_request}"
-        Raw Client Stats (Last 7 days):
-        {raw_stats_text}
+        Raw Stats (7 Days):
+        {raw_stats_summary}
         
         [LANGUAGE ANCHORING - CRITICAL]
         You MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
         If ambiguous, default to French.
-        After outputting the tag, write the ENTIRE rest of the response in that chosen language.
 
         [TERMINOLOGY & LOCALIZATION]
-        If writing in French, use natural, professional sports terminology. Never translate literally. 
-        You MUST use these specific translations:
-        - "7-day Performance Review" = "Bilan Hebdomadaire"
-        - "Total Workouts" = "Total des séances"
+        Use professional terminology. Required translations for French:
+        - "7-day Performance Review" = "Bilan hebdomadaire"
         - "Total Active Time" = "Temps d'activité total"
         - "Breakdown by Sport" = "Répartition par sport"
         - "Run" or "Running" = "Course à pied"
@@ -212,40 +180,23 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         - "Coach's Note" = "Note du coach"
 
         [TASK]
-        Format the client's weekly stats into a clean summary and add a short, 2-sentence encouraging review at the end based on their mix of sports.
+        Summarize the stats and provide a 2-sentence expert review. 
 
         [STRICT INSTRUCTIONS]
-        1. SMART GYM LOGIC: If they did gym/weight training with 0 Coros Load, DO NOT say they were resting. Acknowledge the strength work!
-        2. RECOVERY PROTOCOL: If Total Coros Load > 400, strictly advise them to prioritize recovery.
-        3. DATA ACCURACY: Do not alter the numbers from the Raw Client Stats. Just format and translate them.
-        4. CASING: Use normal Sentence Case or Title Case for all headers and labels. Do NOT use all caps (NO MAJUSCULES). Do not use brackets [] in the output.
-        5. PLAIN TEXT ONLY: Absolutely NO HTML tags (no <b>, no <i>).
-        6. NO MARKDOWN: Absolutely NO asterisks (*) or hashtags (#). 
-        7. EMOJIS: Use emojis tastefully for the headers and the coach's note.
-
-        [OUTPUT STRUCTURE]
-        [LANG: XX]
-        📊 [Translated '7-day Performance Review']
-        ──────────────────────
-        [Translated 'Total Workouts']: [Value]
-        [Translated 'Total Active Time']: [Value]
-        (Include Load if it exists in raw data)
-
-        🏅 [Translated 'Breakdown by Sport']:
-        • [Translated Sport]: [Count] session(s) | [Time] | [Distance]
-
-        [Translated "Coach's Note"]:
-        [Your 2-sentence review]
+        1. RECOVERY ADVICE: If Load > 400, insist on a rest day.
+        2. FORMATTING: Use Title Case for headers. No ALL CAPS. 
+        3. PLAIN TEXT ONLY: No HTML. No Markdown. 
+        4. DIVIDER: Use ────────────────────── after the main title.
         """
         
         ai_review = await ask_llm(prompt)
         clean_review = ai_review.replace("[LANG: FR]", "").replace("[LANG: EN]", "").replace("*", "").strip()
-        await status_msg.edit_text(clean_review)
+        
+        final_display = f"📊 {clean_review}"
+        await status_msg.edit_text(final_display)
+        return clean_review
         
     except Exception as e:
-        logger.error(f"❌ Stats Command Error: {e}")
-        await status_msg.edit_text(f"⚠️ Error fetching stats: {str(e)}")
-        
-    except Exception as e:
-            logger.error(f"❌ Stats Logic/Display Error: {e}")
-            await status_msg.edit_text(f"⚠️ Stats summary failed: {str(e)}")
+        logger.error(f"❌ Stats Logic/Display Error: {e}")
+        await status_msg.edit_text(f"⚠️ Could not generate stats summary.")
+        return None
