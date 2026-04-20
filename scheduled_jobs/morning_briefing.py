@@ -8,7 +8,9 @@ from icalevents.icalevents import events
 from langgraph.graph import StateGraph, END
 from dotenv import load_dotenv
 
-load_dotenv()
+script_dir = os.path.dirname(os.path.abspath(__file__))
+env_path = os.path.join(script_dir, '.env')
+load_dotenv(env_path)
 
 def ask_llm(prompt: str) -> str:
     """Routes the prompt to OpenRouter's Premium Qwen model."""
@@ -30,14 +32,13 @@ def ask_llm(prompt: str) -> str:
         res.raise_for_status() 
         
         raw_text = res.json().get('choices', [{}])[0].get('message', {}).get('content', '')
+        return raw_text.strip() if raw_text else ""
         
-        if raw_text is None:
-            raw_text = ""
-            
-        return raw_text.strip()
-        
+    except requests.exceptions.HTTPError as e:
+        print(f"❌ OpenRouter HTTP Error: {e} - Response: {res.text}")
+        return "Error generating briefing."
     except Exception as e:
-        print(f"❌ OpenRouter LLM Error: {e}")
+        print(f"❌ General LLM Error: {e}")
         return "Error generating briefing."
 
 def get_weather(lat=46.5197, lon=6.6323):

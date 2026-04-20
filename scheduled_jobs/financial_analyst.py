@@ -29,14 +29,13 @@ def ask_llm(prompt: str) -> str:
         res.raise_for_status() 
         
         raw_text = res.json().get('choices', [{}])[0].get('message', {}).get('content', '')
+        return raw_text.strip() if raw_text else ""
         
-        if raw_text is None:
-            raw_text = ""
-            
-        return raw_text.strip()
-        
+    except requests.exceptions.HTTPError as e:
+        print(f"❌ OpenRouter HTTP Error: {e} - Response: {res.text}")
+        return "Error analyzing financial data."
     except Exception as e:
-        print(f"❌ OpenRouter LLM Error: {e}")
+        print(f"❌ General LLM Error: {e}")
         return "Error analyzing financial data."
 
 class FinancialReportState(TypedDict):
