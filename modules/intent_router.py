@@ -23,11 +23,13 @@ logger = logging.getLogger(__name__)
 # ==========================================
 # The Natural Language Understanding Brain
 # ==========================================
-async def parse_intent(user_text: str) -> list:
+async def parse_intent(user_text: str, history: list = None) -> list:
     """
     Analyzes raw text to determine which bot functions to trigger.
     Returns a LIST of dictionaries with 'action' and 'data'.
     """
+    history_text = "\n".join(history) if history else "None."
+    
     prompt = f"""
     [ROLE]
     You are a world-class NLU (Natural Language Understanding) routing engine. 
@@ -37,39 +39,60 @@ async def parse_intent(user_text: str) -> list:
     1. TYPO TOLERANCE: Aggressively autocorrect intent in your mind.
     2. SEMANTIC MATCHING: Look for the *meaning* behind the words, not just exact keywords.
     3. MEDIA VS RESEARCH: If asking for something to watch, read, or listen to, ALWAYS route to movie, book, or music.
-    4. THE "CHAT" FALLBACK: Only use the "chat" action if the message is purely conversational.
-    5. COMPOUND INTENTS: If the user asks to do multiple distinct things (e.g., "ajoute beurre et enlève yaourt" or "météo Paris et ajoute lait"), you MUST break them down into MULTIPLE objects in the JSON array.
+    4. THE "CHAT" FALLBACK: Only use the "chat" action if the message is purely conversational, a joke, or general knowledge.
+    5. COMPOUND INTENTS: If the user asks to do multiple distinct things, you MUST break them down into MULTIPLE objects in the JSON array.
 
-    [ACTION DICTIONARY]
+    [ACTION DICTIONARY & EXAMPLES]
     Format -> action_name: [Trigger description] -> Data Payload
-
+    
     --- LISTS & FOOD ---
-    - grocery_add: User wants to add/buy an item. -> data: "the specific item"
-    - grocery_remove: User wants to remove/delete/cross off an item. -> data: "the specific item"
-    - grocery_list: User wants to see/read the current shopping list. -> data: ""
-    - recipe: User wants cooking ideas or recipes based on items. -> data: "the ingredients"
-    - decide: User wants to choose between options (e.g., "tacos pizza", "A ou B"). -> data: "option1 | option2 | option3"
+    - grocery_add: User wants to add/buy an item. 
+      * Ex: "ajoute du lait" -> data: "lait" | "need eggs and bread" -> data: "eggs and bread"
+    - grocery_remove: User wants to remove/delete/cross off an item. 
+      * Ex: "enlève les pommes" -> data: "pommes" | "crossed off milk" -> data: "milk"
+    - grocery_list: User wants to see/read the current shopping list. 
+      * Ex: "qu'est-ce qu'il manque ?" -> data: "" | "show the list" -> data: ""
+    - recipe: User wants cooking ideas or recipes based on items. 
+      * Ex: "que faire avec du poulet et du riz" -> data: "poulet riz" | "dinner ideas" -> data: "dinner"
+    - decide: User wants to choose between options. 
+      * Ex: "tacos ou pizza" -> data: "tacos | pizza" | "pick red, blue, or green" -> data: "red | blue | green"
 
     --- DATA & INFO ---
-    - weather: User asks about temperature or forecasts. -> data: "city name"
-    - portfolio: User asks about stocks, markets, investments. -> data: ""
-    - news: User asks for global news, geopolitics. -> data: ""
-    - research: User asks for factual deep dives or status updates. -> data: "the topic"
+    - weather: User asks about temperature or forecasts. 
+      * Ex: "fait-il beau à Paris" -> data: "Paris" | "weather tomorrow" -> data: ""
+    - portfolio: User asks about stocks, markets, investments. 
+      * Ex: "comment va ma bourse" -> data: "" | "crypto update" -> data: ""
+    - news: User asks for global news, geopolitics. 
+      * Ex: "quoi de neuf dans le monde" -> data: "" | "headlines" -> data: ""
+    - research: User asks for CURRENT events, live data, or highly specific news. 
+      * Ex: "qui a gagné le match hier" -> data: "qui a gagné le match hier" | "SpaceX launch status" -> data: "SpaceX launch status"
 
     --- HEALTH & LIFESTYLE ---
-    - train: User wants a workout or training plan. -> data: "sport and details"
-    - stats: User wants to see their Strava or workouts. -> data: ""
-    - dateidea: User wants a romantic plan or date idea. -> data: "city name"
+    - train: User wants a workout or training plan. 
+      * Ex: "séance de jambes" -> data: "jambes" | "5k run easy" -> data: "running easy 5k"
+    - stats: User wants to see their Strava or workouts. 
+      * Ex: "mes stats strava" -> data: "" | "how much did I run this week" -> data: ""
+    - dateidea: User wants a romantic plan or date idea. 
+      * Ex: "quoi faire ce soir à Genève" -> data: "Genève" | "romantic evening" -> data: ""
 
     --- UTILITIES & FUN ---
-    - remind: User wants a timer or reminder. -> data: "time + message"
-    - cat: User wants a cat gif. -> data: ""
-    - music: User wants a song or playlist recommendation. -> data: "the vibe or genre"
-    - movie: User wants a movie or series recommendation. -> data: "the genre or vibe"
-    - book: User wants a book or novel recommendation. -> data: "the topic or vibe"
-    
-    --- FALLBACK ---
-    - chat: General greetings or abstract questions. -> data: "the original user text"
+    - remind: User wants a timer or reminder. 
+      * Ex: "rappel dans 10 min de sortir le four" -> data: "10m sortir le four" | "timer 5m for tea" -> data: "5m for tea"
+    - cat: User wants a cat gif. 
+      * Ex: "envoie un chat" -> data: "" | "need feline dopamine" -> data: ""
+    - music: User wants a song or playlist recommendation. 
+      * Ex: "musique pour courir" -> data: "pour courir" | "jazz vibes" -> data: "jazz"
+    - movie: User wants a movie or series recommendation. 
+      * Ex: "film d'horreur avec des potes" -> data: "horreur potes" | "comedy series" -> data: "comedy"
+    - book: User wants a book or novel recommendation. 
+      * Ex: "livre de dev perso" -> data: "développement personnel" | "sci-fi novel" -> data: "sci-fi"
+
+    --- FALLBACK & CONVERSATION ---
+    - chat: User asks general knowledge questions, wants a joke, needs advice, or makes conversation. 
+      * Ex: "comment soigner un hoquet" -> data: "comment soigner un hoquet" | "raconte une blague" -> data: "raconte une blague" | "hello" -> data: "hello"
+
+    [PREVIOUS CONVERSATION CONTEXT]
+    {history_text}
 
     [USER MESSAGE]
     "{user_text}"
@@ -100,7 +123,13 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_text = update.message.text
     if not user_text: return
 
-    intents = await parse_intent(user_text)
+    if user_text.strip().lower() == "/reset":
+        context.user_data['chat_history'] = []
+        await update.message.reply_text("🧹 <i>Memory wiped! What do you want to talk about next?</i>", parse_mode=ParseMode.HTML)
+        return
+
+    history = context.user_data.get('chat_history', [])
+    intents = await parse_intent(user_text, history)
 
     for intent in intents:
         action = intent.get("action")
@@ -176,13 +205,45 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif action == "chat":
             status_msg = await update.message.reply_text("<i>Thinking...</i>", parse_mode=ParseMode.HTML)
+            
+            if 'chat_history' not in context.user_data:
+                context.user_data['chat_history'] = []
+                
+            history_text = "\n".join(context.user_data['chat_history']) if context.user_data['chat_history'] else "None."
+            
+            persona_prompt = f"""
+            [ROLE]
+            You are MattouBot, a highly intelligent, witty, and helpful personal assistant created by Matthieu.
+            You are currently talking to a user in a Telegram chat.
+
+            [INSTRUCTIONS]
+            1. Be conversational, friendly, and concise. 
+            2. If asked for a joke, make it actually funny and clever.
+            3. If asked a general knowledge question, provide a clear, factual, and helpful answer.
+            4. Keep formatting clean. Use emojis tastefully. No markdown headers.
+            
+            [PREVIOUS CONVERSATION CONTEXT]
+            {history_text}
+            
+            [CURRENT USER MESSAGE]
+            "{user_text}"
+            """
+            
             try:
-                response = await ask_llm(user_text)
+                response = await ask_llm(persona_prompt)
+                
                 if not response:
-                    await status_msg.edit_text("⚠️ The AI didn't return an answer. Is the API down?")
+                    await status_msg.edit_text("⚠️ My brain is blank right now. Try again?")
                 else:
                     clean_response = response.replace("*", "").replace("#", "")
                     await status_msg.edit_text(clean_response)
+                    
+                    context.user_data['chat_history'].append(f"User: {user_text}")
+                    context.user_data['chat_history'].append(f"MattouBot: {clean_response}")
+                    
+                    if len(context.user_data['chat_history']) > 4:
+                        context.user_data['chat_history'] = context.user_data['chat_history'][-4:]
+                        
             except Exception as e:
                 logger.error(f"❌ General Chat Error: {e}")
                 await status_msg.edit_text(f"❌ My brain is foggy: {str(e)}")
@@ -212,7 +273,7 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if res.status_code != 200:
             logger.error(f"Whisper API Error: {res.text}")
-            await status_msg.edit_text("⚠️ <i>My ears are clogged (Whisper API error). Try typing!</i>", parse_mode=ParseMode.HTML)
+            await status_msg.edit_text("⚠️ <i>My ears are clogged. Try typing!</i>", parse_mode=ParseMode.HTML)
             return
             
         transcription = res.json().get("text", "").strip()
@@ -228,6 +289,9 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             parse_mode=ParseMode.HTML
         )
 
+        history = context.user_data.get('chat_history', [])
+        history_text = "\n".join(history) if history else "None."
+
         prompt = f"""
         You are a strict, highly logical API router. 
         Read this transcribed voice message: "{transcription}"
@@ -238,6 +302,9 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         1. Extract ONLY the exact parameters needed.
         2. Detect language. Set "lang" to "fr" (French) or "en" (English).
         3. Unsupported languages -> set "command" to "unsupported_language".
+        
+        [PREVIOUS CONVERSATION CONTEXT]
+        {history_text}
         
         AVAILABLE COMMANDS & ARGUMENTS:
         - train: args = ["sport details"] 
@@ -255,34 +322,35 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         - cat: args = [] 
         - dateidea: args = ["city"]
         - research: args = ["topic"]
-        - remind: args = ["time", "message"] (e.g., ["15m", "check the oven"])
+        - remind: args = ["time", "message"]
+        - chat: args = ["the full user message"] (USE THIS for general conversation, questions, jokes, or advice)
             
         Return ONLY a valid JSON list of dictionaries.
         
-        EXAMPLE - "Quel est le temps à Lausanne et donne moi les infos":
+        EXAMPLE - "Quel est le temps à Lausanne et raconte une blague":
         [
           {{"command": "weather", "args": ["Lausanne"], "lang": "fr"}},
-          {{"command": "news", "args": [], "lang": "fr"}}
+          {{"command": "chat", "args": ["raconte une blague"], "lang": "fr"}}
         ]
         """
         
         routing_response = await ask_llm(prompt, max_tokens=200)
-        routing_response = routing_response.replace("```json", "").replace("```", "").strip()
         
         try:
-            commands_to_run = json.loads(routing_response)
-        except json.JSONDecodeError:
-            logger.error(f"❌ JSON Parse Error from Voice LLM: {routing_response}")
+            clean_json = re.search(r'\[.*\]', routing_response, re.DOTALL).group()
+            commands_to_run = json.loads(clean_json)
+        except Exception as e:
+            logger.error(f"❌ JSON Parse Error from Voice LLM: {routing_response} | Error: {e}")
             await status_msg.edit_text("⚠️ <i>I understood the words, but my brain failed to map the commands!</i>", parse_mode=ParseMode.HTML)
             return
 
         if not commands_to_run:
-            safe_transcription = html.escape(transcription)
             await status_msg.edit_text(
                 f"🗣️ <b>You said:</b> <i>\"{safe_transcription}\"</i>\n"
                 f"💬 I heard you, but I didn't detect any specific commands to run!", 
                 parse_mode=ParseMode.HTML
             )
+            return
 
         await status_msg.delete()
         
@@ -316,7 +384,51 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             
             context.user_data["lang"] = lang
             
-            if cmd_name in command_map:
+            if cmd_name == "chat":
+                chat_text = args[0] if args else transcription
+                chat_status = await update.message.reply_text("<i>Thinking...</i>", parse_mode=ParseMode.HTML)
+                
+                if 'chat_history' not in context.user_data:
+                    context.user_data['chat_history'] = []
+                
+                persona_prompt = f"""
+                [ROLE]
+                You are MattouBot, a highly intelligent, witty, and helpful personal assistant created by Matthieu.
+                You are currently talking to a user via voice-to-text in Telegram.
+
+                [INSTRUCTIONS]
+                1. Be conversational, friendly, and concise. 
+                2. If asked for a joke, make it actually funny and clever.
+                3. If asked a general knowledge question, provide a clear, factual answer.
+                4. Keep formatting clean. Use emojis tastefully. No markdown headers.
+                
+                [PREVIOUS CONVERSATION CONTEXT]
+                {history_text}
+                
+                [CURRENT USER MESSAGE]
+                "{chat_text}"
+                """
+                
+                try:
+                    chat_response = await ask_llm(persona_prompt)
+                    if chat_response:
+                        clean_response = chat_response.replace("*", "").replace("#", "")
+                        await chat_status.edit_text(clean_response)
+                        
+                        # Save to memory!
+                        context.user_data['chat_history'].append(f"User (Voice): {chat_text}")
+                        context.user_data['chat_history'].append(f"MattouBot: {clean_response}")
+                        
+                        if len(context.user_data['chat_history']) > 4:
+                            context.user_data['chat_history'] = context.user_data['chat_history'][-4:]
+                    else:
+                        await chat_status.edit_text("⚠️ My brain is blank right now.")
+                except Exception as e:
+                    logger.error(f"❌ Voice Chat Error: {e}")
+                    await chat_status.edit_text(f"❌ My brain is foggy: {str(e)}")
+            
+            # 4. Handle all other normal commands
+            elif cmd_name in command_map:
                 context.args = args 
                 await command_map[cmd_name](update, context)
             else:
