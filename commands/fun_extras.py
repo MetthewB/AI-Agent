@@ -303,7 +303,7 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if any(w in kw_lower for w in ["musique", "chanson", "pour", "avec", "de", "détente", "sport", "ambiance", "playlist"]):
             lang = 'fr'
             context.user_data['lang'] = 'fr'
-        elif any(w in kw_lower for w in ["music", "song", "for", "with", "chill", "workout", "vibe"]):
+        elif any(w in kw_lower for w in ["music", "song", "for", "with", "chill", "workout", "vibe", "playlist"]):
             lang = 'en'
             context.user_data['lang'] = 'en'
         
@@ -326,13 +326,8 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return None
 
     safe_keywords = html.escape(keywords)
-    
-    if lang == 'fr':
-        status_text = f"🎧 <i>Recherche de '{safe_keywords}'...</i>"
-        btn_text = "🔄 Autre morceau"
-    else:
-        status_text = f"🎧 <i>Searching for '{safe_keywords}'...</i>"
-        btn_text = "🔄 Spin another track"
+    status_text = f"🎧 <i>Recherche de '{safe_keywords}'...</i>" if lang == 'fr' else f"🎧 <i>Searching for '{safe_keywords}'...</i>"
+    btn_text = "🔄 Autre idée" if lang == 'fr' else "🔄 Spin another track"
     
     if query:
         status_msg = await query.edit_message_text(status_text, parse_mode=ParseMode.HTML)
@@ -341,16 +336,10 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     current_time = time.time()
     one_week_in_seconds = 7 * 24 * 60 * 60
+    if 'history_music' not in context.user_data: context.user_data['history_music'] = []
     
-    if 'history_music' not in context.user_data:
-        context.user_data['history_music'] = []
-        
-    valid_history = [
-        item for item in context.user_data['history_music'] 
-        if (current_time - item['timestamp']) < one_week_in_seconds
-    ]
+    valid_history = [item for item in context.user_data['history_music'] if (current_time - item['timestamp']) < one_week_in_seconds]
     context.user_data['history_music'] = valid_history
-    
     history_titles = [item['title'] for item in valid_history]
     history_text = "\n".join(f"- {title}" for title in history_titles) if history_titles else "None."
 
@@ -364,26 +353,26 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     [CONTEXT]
     User Request: "{keywords}"
-
-    [DO NOT RECOMMEND - RECENT SUGGESTIONS]
-    You MUST NOT suggest any of the following items. They have already been recommended recently:
-    {history_text}
+    Recent Recommendations (Avoid these): {history_text}
 
     [TASK]
-    Suggest ONE perfect song, album, or playlist based on the TRUE MEANING of the request.
+    Suggest EITHER a single masterpiece OR a curated mini-playlist (3-5 songs) based on the user's intent.
+    - If the user explicitly asks for a "playlist", provide 5 iconic tracks.
+    - Otherwise, suggest one perfect song or album.
 
     [STRICT INSTRUCTIONS]
-    1. LANGUAGE OVERRIDE: You MUST write the ENTIRE recommendation natively in {target_lang}. Do not drift into English if {target_lang} is FRENCH.
-    2. SEMANTIC CURATION: Interpret the *vibe*, *activity*, or *meaning* of the request. DO NOT just search for a song with the user's exact words in the title.
-    3. NO HALLUCINATIONS: You must recommend a REAL, existing, published track or album by a REAL artist. Do not invent titles or artists.
-    4. CASING: Use normal **Sentence Case** for the {vibe_label} description. Do NOT use Title Case for every word.
-    5. FORMATTING: Plain text only. No Markdown (no asterisks). Do not use brackets [] for the labels.
+    1. LANGUAGE OVERRIDE: Write natively in {target_lang}.
+    2. PLAYLIST LOGIC: If providing a playlist, format each track as "♫ Title - Artist".
+    3. SEMANTIC ACCURACY: For "white girl music", include high-energy pop anthems (Taylor Swift, Katy Perry, etc.).
+    4. NO HALLUCINATIONS: REAL artists and songs only.
+    5. FORMATTING: Plain text only. No Markdown (no asterisks). Exactly 2 or 3 emojis.
 
     [OUTPUT STRUCTURE]
-    ♫ Title by Artist
+    [♫ Title - Artist] or [♫ Playlist Name]
     {genre_label}: [Value]
     ──────────────────────
     {vibe_label}: [1-2 sentence pitch in {target_lang}]
+    [If Playlist: List the 5 tracks here]
     """
     
     suggestion = await ask_llm(prompt) 
