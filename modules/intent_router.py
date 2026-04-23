@@ -36,6 +36,44 @@ def log_interaction(context, user_input, bot_output):
     if len(context.user_data['chat_history']) > 6:
         context.user_data['chat_history'] = context.user_data['chat_history'][-6:]
 
+
+def should_bot_wake_up(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> bool:
+    """Determines if the bot should process a message in a group chat."""
+    chat_type = update.effective_chat.type
+    
+    # 1. Always wake up in private messages
+    if chat_type not in ['group', 'supergroup']:
+        return True
+
+    text_lower = text.strip().lower()
+
+    # 2. Direct Summons (Names, Replies, Commands, Fast-paths)
+    if any(name in text_lower for name in ["mattou", "@mattoubot"]): return True
+    if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id: return True
+    if text_lower.startswith("/"): return True
+    if text_lower in ["chat", "cat"]: return True
+
+    # 3. Smart Implicit Commands (Checking for intent combinations)
+    
+    # Grocery: "ajoute/add" + "liste/courses"
+    if any(w in text_lower for w in ["ajoute", "add", "enlève", "remove"]) and any(w in text_lower for w in ["liste", "courses", "list"]):
+        return True
+        
+    # Reminders: "rappelle/remind" + a preposition
+    if any(w in text_lower for w in ["rappelle", "remind"]) and any(w in text_lower for w in ["dans", "in", "à", "de", "at", "to"]):
+        return True
+        
+    # Decisions: "choisis/décide" + "ou/entre"
+    if any(w in text_lower for w in ["décide", "choisis", "decide", "choose"]) and any(w in text_lower for w in ["ou", "or", "entre", "between"]):
+        return True
+        
+    # Single strong keywords (Weather, Fitness, Media)
+    strong_keywords = ["météo", "weather", "recette", "recipe", "strava", "bilan", "stats"]
+    if any(w in text_lower for w in strong_keywords):
+        return True
+
+    return False
+
 # ==========================================
 # The Natural Language Understanding Brain
 # ==========================================
@@ -107,9 +145,11 @@ async def parse_intent(user_text: str, history: list = None) -> list:
     - book: User wants a book or novel recommendation. 
       * Ex: "livre de dev perso" -> data: "développement personnel" | "sci-fi novel" -> data: "sci-fi"
 
-    --- FALLBACK & CONVERSATION ---
-    - chat: User asks general knowledge questions, wants a joke, needs advice, or makes conversation. 
-      * Ex: "comment soigner un hoquet" -> data: "comment soigner un hoquet" | "raconte une blague" -> data: "raconte une blague" | "hello" -> data: "hello"
+    --- FALLBACK, CONVERSATION & IGNORE ---
+    - ignore: The user is talking to someone else in a group chat, or the message is clearly not directed at you.
+      * Ex: "tu veux manger quoi ce soir ?" -> data: "" | "j'ai acheté le lait" -> data: ""
+    - chat: User EXPLICITLY asks the bot a question, wants a joke, or makes conversation WITH THE BOT. 
+      * Ex: "comment soigner un hoquet" -> data: "comment soigner un hoquet" | "hello" -> data: "hello"
 
     [PREVIOUS CONVERSATION CONTEXT]
     {history_text}
@@ -143,6 +183,8 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_text = update.message.text
     if not raw_text: return
 
+    if not should_bot_wake_up(update, context, raw_text): return
+        
     user_text = raw_text.strip().lower()
 
     if user_text == "chat":
