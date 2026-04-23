@@ -10,7 +10,7 @@ from telegram.constants import ParseMode
 
 from modules.ai_core import ask_llm
 from modules.config import PORTFOLIO_MAP
-from modules.utils import get_lang_rule, is_authorized 
+from modules.utils import is_authorized 
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,7 @@ async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await status_msg.edit_text(full_response, parse_mode=ParseMode.HTML)
     return f"Portfolio Status: {', '.join([s.split('</b>')[0].replace('• <b>', '') for s in stats[:3]])}..."
 
+
 async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Synthesizes news and returns the executive summary for memory."""
     if not is_authorized(update): return None
@@ -72,8 +73,7 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await update.message.reply_text(status_text, parse_mode=ParseMode.HTML)
     
     raw_news = []
-    
-    topic = " ".join(context.args).strip()
+    topic = " ".join(context.args).strip() if context.args else ""
     
     if topic:
         queries = [f"{topic} geopolitics", f"{topic} news"]

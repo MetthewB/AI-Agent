@@ -55,27 +55,40 @@ async def grocery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     logger.info(f"▶️ User {update.effective_chat.id} triggered /grocery")
     
     lang = context.user_data.get('lang', 'fr')
-    item = " ".join(context.args)
+    raw_item_str = " ".join(context.args)
     
-    if not item:
+    if not raw_item_str:
         text, reply_markup = build_grocery_ui(lang)
         await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         return "Displayed the grocery list."
 
     try:
-        grocery_collection.insert_one({"item": item})
-        text, reply_markup = build_grocery_ui(lang)
-        safe_item = html.escape(item)
+        cleaned_str = raw_item_str.replace(" et ", ",").replace(" and ", ",")
+        items_to_add = [i.strip() for i in cleaned_str.split(",") if i.strip()]
         
-        if lang == 'fr':
-            confirmation = f"✅ <b>{safe_item}</b> ajouté à la liste !"
-            mem_return = f"Added {item} to the grocery list."
+        if not items_to_add:
+            return None
+
+        grocery_collection.insert_many([{"item": item} for item in items_to_add])
+        text, reply_markup = build_grocery_ui(lang)
+        
+        if len(items_to_add) == 1:
+            safe_item = html.escape(items_to_add[0])
+            if lang == 'fr':
+                confirmation = f"✅ <b>{safe_item}</b> ajouté à la liste !"
+            else:
+                confirmation = f"✅ Added <b>{safe_item}</b> to the grocery list!"
+            mem_return = f"Added {items_to_add[0]} to the grocery list."
         else:
-            confirmation = f"✅ Added <b>{safe_item}</b> to the grocery list!"
-            mem_return = f"Added {item} to the grocery list."
+            if lang == 'fr':
+                confirmation = f"✅ <b>{len(items_to_add)} articles</b> ajoutés à la liste !"
+            else:
+                confirmation = f"✅ Added <b>{len(items_to_add)} items</b> to the grocery list!"
+            mem_return = f"Added {len(items_to_add)} items to the grocery list: {', '.join(items_to_add)}"
             
         await update.message.reply_text(f"{confirmation}\n\n{text}", reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         return mem_return
+    
     except Exception as e:
         logger.error(f"❌ Grocery Add Error: {e}")
         err_msg = "⚠️ <i>Échec de l'ajout.</i>" if lang == 'fr' else "⚠️ <i>Failed to add the item.</i>"
@@ -162,10 +175,15 @@ async def decide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_text = update.message.text if update.message and update.message.text else ""
     raw_text_lower = raw_text.lower()
     
-    fr_keywords = ["ou", "entre", "décide", "choisis", "lequel"]
-    if any(word in raw_text_lower.split() for word in fr_keywords) or raw_text_lower.startswith("décide"):
+    fr_keywords = ["ou", "entre", "décide", "choisis", "lequel", "choisir"]
+    en_keywords = ["or", "between", "decide", "choose", "which", "pick"]
+    
+    if any(word in raw_text_lower.split() for word in fr_keywords):
         lang = 'fr'
         context.user_data['lang'] = 'fr'
+    elif any(word in raw_text_lower.split() for word in en_keywords):
+        lang = 'en'
+        context.user_data['lang'] = 'en'
     else:
         lang = context.user_data.get('lang', 'en')
     
@@ -211,71 +229,75 @@ async def decide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return None
     
+    # 1. Capture user input and detect language
     user_input = update.message.text if update.message and update.message.text else "Recipe"
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /recipe with: {user_input}")
+    
+    lang = context.user_data.get('lang', 'fr')
+    user_input_lower = user_input.lower()
+    
+    # Fast language sniffing
+    if any(w in user_input_lower for w in ["recette", "cuisine", "manger", "boire", "chef"]):
+        lang = 'fr'
+        context.user_data['lang'] = 'fr'
+    elif any(w in user_input_lower for w in ["recipe", "cook", "eat", "drink", "mixologist"]):
+        lang = 'en'
+        context.user_data['lang'] = 'en'
+
     query = update.callback_query
     if query:
         await query.answer()
         logger.info(f"▶️ User {update.effective_chat.id} triggered re-roll for /recipe")
         ingredients = context.user_data.get('last_recipe', '')
     else:
-        logger.info(f"▶️ User {update.effective_chat.id} triggered /recipe")
         ingredients = " ".join(context.args)
         context.user_data['last_recipe'] = ingredients
         
     if not ingredients:
-        usage_text = "⚠️ <b>Usage:</b> /recipe [ingrédient 1], [ingrédient 2]"
+        usage_text = "⚠️ <b>Usage:</b> /recipe [ingrédient 1], [ingrédient 2]" if lang == 'fr' else "⚠️ <b>Usage:</b> /recipe [ingredient 1], [ingredient 2]"
         await update.effective_message.reply_text(usage_text, parse_mode=ParseMode.HTML)
         return None
         
-    status_msg = await update.effective_message.reply_text("👨‍🍳 <i>Reviewing your ingredients and dreaming up a creation...</i>", parse_mode=ParseMode.HTML)
+    status_text = "👨‍🍳 <i>Analyse de vos ingrédients et création d'une recette...</i>" if lang == 'fr' else "👨‍🍳 <i>Reviewing your ingredients and dreaming up a creation...</i>"
+    status_msg = await update.effective_message.reply_text(status_text, parse_mode=ParseMode.HTML)
+    
+    target_lang = "FRENCH" if lang == 'fr' else "ENGLISH"
     
     prompt = f"""
     [ROLE]
-    You are an inventive Michelin-star Chef and Master Mixologist who specializes in "fridge-clearing" creations.
+    You are an inventive Michelin-star Chef and Master Mixologist who specializes in "fridge-clearing" gourmet creations.
 
     [CONTEXT]
     User Request: "{user_input}"
     Available ingredients: {ingredients}
     
-    [LANGUAGE ANCHORING - CRITICAL]
-    Examine the "User Request" to detect the language.
-    You MUST begin your response by explicitly declaring that language using exactly one of these tags: [LANG: EN] or [LANG: FR].
-    If ambiguous, default to French.
-    After outputting the tag, write the ENTIRE rest of the response in that chosen language.
-
-    [TERMINOLOGY & LOCALIZATION]
-    If writing in French, use natural, gourmet terminology. You MUST use these specific translations for your labels:
-    - "Ingredients" = "Ingrédients"
-    - "Instructions" = "Préparation"
-
     [TASK]
     Invent a creative, delicious, and easy-to-make recipe using these ingredients. 
     ADAPTIVE LOGIC: If the ingredients are primarily alcohol, sodas, or juices (like rum and cola), create a Cocktail. Otherwise, create a meal or dessert.
 
     [STRICT INSTRUCTIONS]
-    1. INGREDIENT STRICTNESS: Prioritize listed ingredients. If making food, assume a basic pantry (oil, salt, pepper, water). If making a drink, assume basic bar staples (ice, maybe a garnish).
-    2. CASING: Use normal **Sentence Case** only for the title and steps. Capitalize the first word. Do NOT use Title Case for every word.
-    3. PLAIN TEXT ONLY: Absolutely NO HTML tags.
-    4. NO MARKDOWN: Strictly avoid all Markdown (no asterisks *, no hashtags #). 
-    5. EMOJIS: Use exactly 2 or 3 emojis total. Match the emoji to the creation (e.g., 🍹 for drinks, 🍳 for food).
+    1. LANGUAGE OVERRIDE: You MUST write the ENTIRE response natively in {target_lang}. Do not drift into English if {target_lang} is FRENCH.
+    2. TERMINOLOGY: If in French, use "Ingrédients" and "Préparation" as headers. If in English, use "Ingredients" and "Instructions".
+    3. INGREDIENT STRICTNESS: Prioritize listed ingredients. Assume a basic pantry.
+    4. CASING: Use normal **Sentence Case** only for the title and steps.
+    5. FORMATTING: Plain text ONLY. No Markdown (no asterisks). 
+    6. EMOJIS: Use exactly 2 or 3 emojis total.
 
     [OUTPUT STRUCTURE]
-    [LANG: XX]
-    [Emoji] [Catchy recipe title in sentence case]
+    [Emoji] [Catchy recipe title]
     ──────────────────────
-    [Translated 'Ingredients']:
+    Ingredients:
     • [Item 1]
-    • [Item 2]
-
-    [Translated 'Instructions']:
+    
+    Instructions:
     1. [Step 1]
-    2. [Step 2]
     """
     
     recipe_output = await ask_llm(prompt)
-    clean_recipe = recipe_output.replace("[LANG: FR]", "").replace("[LANG: EN]", "").replace("*", "").strip()
+    clean_recipe = recipe_output.replace("*", "").strip()
     
-    keyboard = [[InlineKeyboardButton("🔄 Re-roll", callback_data="reroll_recipe")]]
+    btn_text = "🔄 Nouvelle idée" if lang == 'fr' else "🔄 Re-roll"
+    keyboard = [[InlineKeyboardButton(btn_text, callback_data="reroll_recipe")]]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     try:
@@ -283,5 +305,6 @@ async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return clean_recipe
     except Exception as e:
         logger.error(f"❌ Recipe Display Error: {e}")
-        await status_msg.edit_text("⚠️ Erreur d'affichage, voici la recette brute :\n\n" + clean_recipe)
+        err_msg = "⚠️ Échec de la génération." if lang == 'fr' else "⚠️ Generation failed."
+        await status_msg.edit_text(err_msg)
         return clean_recipe

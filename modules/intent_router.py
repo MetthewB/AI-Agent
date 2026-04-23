@@ -12,6 +12,7 @@ from modules.ai_core import ask_llm
 from modules.config import HF_TOKEN
 from modules.utils import is_authorized
 
+from commands.general import start_command
 from commands.finance_news import portfolio_command, news_command
 from commands.knowledge_util import research_command, weather_command, remind_command
 from commands.shared_life import grocery_command, grocery_remove_command, recipe_command, decide_command
@@ -60,6 +61,10 @@ async def parse_intent(user_text: str, history: list = None) -> list:
     [ACTION DICTIONARY & EXAMPLES]
     Format -> action_name: [Trigger description] -> Data Payload
     
+    --- GENERAL & SYSTEM ---
+    - start: User types "start", "help", wants to see the command list, or asks what you can do.
+      * Ex: "start" -> data: "" | "what can you do?" -> data: "" | "help" -> data: ""
+
     --- LISTS & FOOD ---
     - grocery_add: User wants to add/buy an item. 
       * Ex: "ajoute du lait" -> data: "lait" | "need eggs and bread" -> data: "eggs and bread"
@@ -152,7 +157,10 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         logger.info(f"🧠 NLU Intent Detected: {action} | Data: {data}")
 
-        if action == "grocery_add":
+        if action == "start":
+            await start_command(update, context)
+
+        elif action == "grocery_add":
             context.args = [data]
             await grocery_command(update, context)
             
@@ -188,6 +196,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await portfolio_command(update, context)
             
         elif action == "news":
+            context.args = data.split() if data else []
             await news_command(update, context)
             
         elif action == "cat":
@@ -322,6 +331,7 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {history_text}
         
         AVAILABLE COMMANDS & ARGUMENTS:
+        - start: args = [] (to see the help menu or what the bot can do)
         - train: args = ["sport details"] 
         - weather: args = ["city"] 
         - news: args = [] 
@@ -370,6 +380,7 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await status_msg.delete()
         
         command_map = {
+            "start": start_command,
             "train": train_command,
             "weather": weather_command,
             "news": news_command,
