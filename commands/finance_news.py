@@ -54,59 +54,83 @@ async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Synthesizes news and returns the executive summary for memory."""
     if not is_authorized(update): return None
-    logger.info(f"▶️ User {update.effective_chat.id} triggered /news")
     
-    status_msg = await update.message.reply_text("<i>Analyzing global headlines...</i> ⏳", parse_mode=ParseMode.HTML)
+    user_input = update.message.text if update.message and update.message.text else "News"
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /news with: {user_input}")
+    
+    lang = context.user_data.get('lang', 'fr')
+    user_input_lower = user_input.lower()
+    
+    if any(w in user_input_lower for w in ["actu", "info", "bilan", "recherche", "nouvelle"]):
+        lang = 'fr'
+        context.user_data['lang'] = 'fr'
+    elif any(w in user_input_lower for w in ["news", "briefing"]):
+        lang = 'en'
+        context.user_data['lang'] = 'en'
+
+    status_text = "<i>Analyse de l'actualité mondiale...</i> ⏳" if lang == 'fr' else "<i>Analyzing global headlines...</i> ⏳"
+    status_msg = await update.message.reply_text(status_text, parse_mode=ParseMode.HTML)
+    
     raw_news = []
-    queries = ["geopolitics world", "geopolitics Switzerland", "geopolitics France"]
+    
+    topic = " ".join(context.args).strip()
+    
+    if topic:
+        queries = [f"{topic} geopolitics", f"{topic} news"]
+    else:
+        queries = ["geopolitics world", "geopolitics Switzerland", "geopolitics France"]
     
     try:
         for q in queries:
             url = f"https://news.google.com/rss/search?q={q}+when:1d&hl=en-US&gl=US&ceid=US:en"
             res = await asyncio.to_thread(requests.get, url, timeout=10)
             soup = BeautifulSoup(res.content, "xml")
-            for item in soup.find_all("item", limit=2):
+            for item in soup.find_all("item", limit=3 if topic else 2):
                 raw_news.append(item.title.text)
         
-        news_context = "\n".join(raw_news)
+        news_context = "\n".join(raw_news) if raw_news else "No recent headlines found."
+        
+        target_lang = "FRENCH" if lang == 'fr' else "ENGLISH"
+        
         prompt = f"""
         [ROLE]
         You are a highly analytical Geopolitical Briefing Officer.
 
         [CONTEXT]
-        Raw headlines (Last 24h):
+        User Request: "{user_input}"
+        Raw headlines from the last 24h:
         {news_context}
-        
-        [LANGUAGE ANCHORING - CRITICAL]
-        You MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
-        If ambiguous, default to French.
-        After outputting the tag, write the ENTIRE rest of the response in that chosen language.
 
         [TASK]
         Synthesize the headlines into a single, natural, and cohesive paragraph connecting the dots between events.
+        CRITICAL: Ensure your briefing focuses primarily on answering the "User Request" (e.g., if they asked about France, focus heavily on the French headlines).
 
         [STRICT INSTRUCTIONS]
-        1. OBJECTIVITY: Neutral, journalistic tone. No personal opinions.
-        2. NO HALLUCINATION: If headlines are missing for a region, focus only on the data available.
-        3. FORMATTING: Plain text only. No ALL CAPS titles. No Markdown (no asterisks).
-        4. EMOJIS: Include exactly 2 relevant emojis at the end.
+        1. LANGUAGE OVERRIDE: You MUST write the ENTIRE briefing natively in {target_lang}. Translate the English headlines into {target_lang} before summarizing. Do NOT drift into English if {target_lang} is FRENCH.
+        2. OBJECTIVITY: Neutral, journalistic tone.
+        3. NO HALLUCINATION: Only use the provided headlines.
+        4. CASING: Use normal **Sentence Case** only. Capitalize the first word of sentences and proper nouns. Do NOT use Title Case for every word.
+        5. FORMATTING: Plain text only. No Markdown (no asterisks).
+        6. EMOJIS: Include exactly 2 relevant emojis at the end.
 
         [OUTPUT STRUCTURE]
-        [LANG: XX]
-        [A single paragraph of 4-6 sentences briefing the client.]
+        [Briefing paragraph of 4-6 sentences] [Emoji][Emoji]
         """
         
         summary = await ask_llm(prompt)
-        clean_summary = summary.replace("[LANG: FR]", "").replace("[LANG: EN]", "").replace("*", "").strip()
+        clean_summary = summary.replace("*", "").strip()
         
-        pref = context.user_data.get('lang', 'fr')
-        header_text = "Bilan Géopolitique" if pref == 'fr' else "Geopolitical Briefing"
+        if topic:
+            header_text = f"Actualité : {topic.title()}" if lang == 'fr' else f"News: {topic.title()}"
+        else:
+            header_text = "Bilan Géopolitique" if lang == 'fr' else "Geopolitical Briefing"
         
-        final_text = f"📰 <b>{header_text}</b>\n──────────────────────\n{clean_summary}"
+        final_text = f"📰 <b>{html.escape(header_text)}</b>\n──────────────────────\n{clean_summary}"
         await status_msg.edit_text(final_text, parse_mode=ParseMode.HTML)
         return clean_summary
 
     except Exception as e:
         logger.error(f"❌ News Error: {e}")
-        await status_msg.edit_text(f"⚠️ News summary failed: {str(e)}")
+        error_msg = "⚠️ Impossible de générer le résumé." if lang == 'fr' else "⚠️ News summary failed."
+        await status_msg.edit_text(error_msg)
         return None

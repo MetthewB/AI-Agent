@@ -17,16 +17,22 @@ logger = logging.getLogger(__name__)
 # ==========================================
 # SHARED LIFE COMMANDS
 # ==========================================
-def build_grocery_ui():
-    """Helper function to fetch the DB and build the interactive inline keyboard."""
+def build_grocery_ui(lang: str = 'en'):
+    """Helper function to fetch the DB and build the interactive bilingual keyboard."""
     try:
         items_cursor = grocery_collection.find()
         docs = list(items_cursor)
         
         if not docs:
-            return "🛒 <b>The grocery list is currently empty!</b>", None
+            empty_msg = "🛒 <b>La liste de courses est vide !</b>" if lang == 'fr' else "🛒 <b>The grocery list is currently empty!</b>"
+            return empty_msg, None
             
-        text = f"🛒 <b>Shared Shopping List ({len(docs)} items):</b>\n<i>Tap an item to cross it off.</i>"
+        if lang == 'fr':
+            text = f"🛒 <b>Liste de courses partagée ({len(docs)} articles) :</b>\n<i>Appuyez sur un article pour le rayer.</i>"
+            empty_btn = "🧹 Vider la liste"
+        else:
+            text = f"🛒 <b>Shared Shopping List ({len(docs)} items):</b>\n<i>Tap an item to cross it off.</i>"
+            empty_btn = "🧹 Empty Entire List"
         
         keyboard = []
         for doc in docs:
@@ -35,34 +41,47 @@ def build_grocery_ui():
             safe_item = html.escape(item_name)
             keyboard.append([InlineKeyboardButton(f"{safe_item}", callback_data=f"g_rm_{item_id}")])
             
-        keyboard.append([InlineKeyboardButton("🧹 Empty Entire List", callback_data="g_empty")])
+        keyboard.append([InlineKeyboardButton(empty_btn, callback_data="g_empty")])
         
         return text, InlineKeyboardMarkup(keyboard)
     except Exception as e:
         logger.error(f"❌ Grocery UI Build Error: {e}")
-        return "⚠️ <i>Database error.</i>", None
+        err_msg = "⚠️ <i>Erreur de base de données.</i>" if lang == 'fr' else "⚠️ <i>Database error.</i>"
+        return err_msg, None
+
 
 async def grocery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return None
     logger.info(f"▶️ User {update.effective_chat.id} triggered /grocery")
+    
+    lang = context.user_data.get('lang', 'fr')
     item = " ".join(context.args)
     
     if not item:
-        text, reply_markup = build_grocery_ui()
+        text, reply_markup = build_grocery_ui(lang)
         await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-        return text
+        return "Displayed the grocery list."
 
     try:
         grocery_collection.insert_one({"item": item})
-        text, reply_markup = build_grocery_ui()
+        text, reply_markup = build_grocery_ui(lang)
         safe_item = html.escape(item)
-        confirmation = f"✅ Added {safe_item} to the grocery list!"
+        
+        if lang == 'fr':
+            confirmation = f"✅ <b>{safe_item}</b> ajouté à la liste !"
+            mem_return = f"Added {item} to the grocery list."
+        else:
+            confirmation = f"✅ Added <b>{safe_item}</b> to the grocery list!"
+            mem_return = f"Added {item} to the grocery list."
+            
         await update.message.reply_text(f"{confirmation}\n\n{text}", reply_markup=reply_markup, parse_mode=ParseMode.HTML)
-        return confirmation
+        return mem_return
     except Exception as e:
         logger.error(f"❌ Grocery Add Error: {e}")
-        await update.message.reply_text("⚠️ <i>Failed to add the item. The cart is stuck!</i>", parse_mode=ParseMode.HTML)
+        err_msg = "⚠️ <i>Échec de l'ajout.</i>" if lang == 'fr' else "⚠️ <i>Failed to add the item.</i>"
+        await update.message.reply_text(err_msg, parse_mode=ParseMode.HTML)
         return None
+
 
 async def grocery_callback_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return None
@@ -72,6 +91,7 @@ async def grocery_callback_handler(update: Update, context: ContextTypes.DEFAULT
     
     data = query.data
     memory_msg = ""
+    lang = context.user_data.get('lang', 'fr')
     
     try:
         if data.startswith("g_rm_"):
@@ -91,16 +111,21 @@ async def grocery_callback_handler(update: Update, context: ContextTypes.DEFAULT
             context.user_data['chat_history'].append(f"System: {memory_msg}")
             if len(context.user_data['chat_history']) > 6:
                 context.user_data['chat_history'] = context.user_data['chat_history'][-6:]
-        text, reply_markup = build_grocery_ui()
+                
+        text, reply_markup = build_grocery_ui(lang)
         await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)  
       
     except Exception as e:
         logger.error(f"❌ Grocery Callback Error: {e}")
 
+
 async def grocery_remove_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return None
+    
+    lang = context.user_data.get('lang', 'fr')
     item_to_remove = " ".join(context.args).strip()
     if not item_to_remove: return None
+    
     try:
         docs = list(grocery_collection.find())
         current_items = [doc["item"] for doc in docs]
@@ -109,50 +134,67 @@ async def grocery_remove_command(update: Update, context: ContextTypes.DEFAULT_T
         
         if best_match:
             grocery_collection.delete_one({"item": best_match})
-            msg = f"✅ Removed {best_match} from the grocery list."
+            msg = f"✅ {best_match} retiré de la liste !" if lang == 'fr' else f"✅ Removed {best_match} from the list."
             await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
-            return msg
+            return f"Removed {best_match} from the grocery list."
         else:
-            msg = f"🔍 I couldn't find '{item_to_remove}' on the list."
+            msg = f"🔍 Impossible de trouver '{item_to_remove}' sur la liste." if lang == 'fr' else f"🔍 I couldn't find '{item_to_remove}' on the list."
             await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
-            return msg
+            return f"Failed to find {item_to_remove} to remove."
     except Exception: 
         return None
 
+
 async def grocery_empty_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return None
+    
+    lang = context.user_data.get('lang', 'fr')
     grocery_collection.delete_many({})
-    msg = "🧹 Grocery list cleared!"
+    
+    msg = "🧹 Liste de courses vidée !" if lang == 'fr' else "🧹 Grocery list cleared!"
     await update.message.reply_text(f"<b>{msg}</b>", parse_mode=ParseMode.HTML)
-    return msg
+    return "Emptied the grocery list."
+
 
 async def decide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return None
     
-    if update.message.text and update.message.text.startswith("/decide"):
-        raw_text = " ".join(context.args)
-        options = [opt.strip() for opt in raw_text.split(",") if opt.strip()]
+    raw_text = update.message.text if update.message and update.message.text else ""
+    raw_text_lower = raw_text.lower()
+    
+    fr_keywords = ["ou", "entre", "décide", "choisis", "lequel"]
+    if any(word in raw_text_lower.split() for word in fr_keywords) or raw_text_lower.startswith("décide"):
+        lang = 'fr'
+        context.user_data['lang'] = 'fr'
+    else:
+        lang = context.user_data.get('lang', 'en')
+    
+    if raw_text.startswith("/decide"):
+        options_text = " ".join(context.args)
+        options = [opt.strip() for opt in options_text.split(",") if opt.strip()]
     else:
         options = context.args
     
     if len(options) < 2:
-        await update.message.reply_text(
-            "🤔 <i>I couldn't quite distinguish the choices. Try something like 'tacos pizza' or 'tacos ou pizza'!</i>", 
-            parse_mode=ParseMode.HTML
-        )
+        if lang == 'fr':
+            error_msg = "🤔 <i>Je n'ai pas bien compris les choix. Essayez 'tacos pizza' ou 'tacos ou pizza' !</i>"
+        else:
+            error_msg = "🤔 <i>I couldn't quite distinguish the choices. Try something like 'tacos pizza' or 'tacos or pizza'!</i>"
+            
+        await update.message.reply_text(error_msg, parse_mode=ParseMode.HTML)
         return None
     
-    status_msg = await update.message.reply_text("⚖️ <i>Weighing the options...</i>", parse_mode=ParseMode.HTML)
+    status_text = "⚖️ <i>Je pèse le pour et le contre...</i>" if lang == 'fr' else "⚖️ <i>Weighing the options...</i>"
+    status_msg = await update.message.reply_text(status_text, parse_mode=ParseMode.HTML)
     await asyncio.sleep(1)
 
     choice = random.choice(options)
     safe_choice = html.escape(choice.upper())
     
-    lang = context.user_data.get('lang', 'en')
     if lang == 'fr':
         templates = [
             f"🪐 L'univers a tranché : <b>{safe_choice}</b> !",
-            f"🎲 Ma pièce numérique est tombée sur : <b>{safe_choice}</b>.",
+            f"🎲 Ma pièce est tombée sur : <b>{safe_choice}</b>.",
             f"🎯 Choix difficile, mais j'irais avec : <b>{safe_choice}</b>."
         ]
     else:
@@ -165,9 +207,11 @@ async def decide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await status_msg.edit_text(random.choice(templates), parse_mode=ParseMode.HTML)
     return choice
 
+
 async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return None
     
+    user_input = update.message.text if update.message and update.message.text else "Recipe"
     query = update.callback_query
     if query:
         await query.answer()
@@ -183,17 +227,19 @@ async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.effective_message.reply_text(usage_text, parse_mode=ParseMode.HTML)
         return None
         
-    status_msg = await update.effective_message.reply_text("👨‍🍳 <i>Reviewing your ingredients and dreaming up a dish...</i>", parse_mode=ParseMode.HTML)
+    status_msg = await update.effective_message.reply_text("👨‍🍳 <i>Reviewing your ingredients and dreaming up a creation...</i>", parse_mode=ParseMode.HTML)
     
     prompt = f"""
     [ROLE]
-    You are an inventive Michelin-star chef who specializes in "fridge-clearing" gourmet cooking.
+    You are an inventive Michelin-star Chef and Master Mixologist who specializes in "fridge-clearing" creations.
 
     [CONTEXT]
+    User Request: "{user_input}"
     Available ingredients: {ingredients}
     
     [LANGUAGE ANCHORING - CRITICAL]
-    You MUST begin your response by explicitly declaring the detected language of the User Request using exactly one of these tags: [LANG: EN] or [LANG: FR].
+    Examine the "User Request" to detect the language.
+    You MUST begin your response by explicitly declaring that language using exactly one of these tags: [LANG: EN] or [LANG: FR].
     If ambiguous, default to French.
     After outputting the tag, write the ENTIRE rest of the response in that chosen language.
 
@@ -203,18 +249,19 @@ async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     - "Instructions" = "Préparation"
 
     [TASK]
-    Invent a creative, delicious, and easy-to-make dinner recipe using these ingredients.
+    Invent a creative, delicious, and easy-to-make recipe using these ingredients. 
+    ADAPTIVE LOGIC: If the ingredients are primarily alcohol, sodas, or juices (like rum and cola), create a Cocktail. Otherwise, create a meal or dessert.
 
     [STRICT INSTRUCTIONS]
-    1. INGREDIENT STRICTNESS: Prioritize listed ingredients. Assume a basic pantry (oil, salt, pepper, water), but no other major items.
-    2. FORMATTING: Use normal Sentence Case or Title Case for all headers. Do NOT use all caps (NO MAJUSCULES). Do not use brackets [] in the output.
+    1. INGREDIENT STRICTNESS: Prioritize listed ingredients. If making food, assume a basic pantry (oil, salt, pepper, water). If making a drink, assume basic bar staples (ice, maybe a garnish).
+    2. CASING: Use normal **Sentence Case** only for the title and steps. Capitalize the first word. Do NOT use Title Case for every word.
     3. PLAIN TEXT ONLY: Absolutely NO HTML tags.
     4. NO MARKDOWN: Strictly avoid all Markdown (no asterisks *, no hashtags #). 
-    5. EMOJIS: Use exactly 2 or 3 emojis total.
+    5. EMOJIS: Use exactly 2 or 3 emojis total. Match the emoji to the creation (e.g., 🍹 for drinks, 🍳 for food).
 
     [OUTPUT STRUCTURE]
     [LANG: XX]
-    🍳 [Catchy Recipe Title]
+    [Emoji] [Catchy recipe title in sentence case]
     ──────────────────────
     [Translated 'Ingredients']:
     • [Item 1]

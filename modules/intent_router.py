@@ -29,11 +29,9 @@ def log_interaction(context, user_input, bot_output):
     if 'chat_history' not in context.user_data:
         context.user_data['chat_history'] = []
     
-    # Format the entry
     context.user_data['chat_history'].append(f"User: {user_input}")
     context.user_data['chat_history'].append(f"MattouBot: {bot_output}")
     
-    # Keep only the last 6 lines (3 full interactions)
     if len(context.user_data['chat_history']) > 6:
         context.user_data['chat_history'] = context.user_data['chat_history'][-6:]
 
@@ -432,7 +430,6 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                         clean_response = chat_response.replace("*", "").replace("#", "")
                         await chat_status.edit_text(clean_response)
                         
-                        # Save to memory!
                         context.user_data['chat_history'].append(f"User (Voice): {chat_text}")
                         context.user_data['chat_history'].append(f"MattouBot: {clean_response}")
                         
@@ -444,7 +441,6 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     logger.error(f"❌ Voice Chat Error: {e}")
                     await chat_status.edit_text(f"❌ My brain is foggy: {str(e)}")
             
-            # 4. Handle all other normal commands
             elif cmd_name in command_map:
                 context.args = args 
                 await command_map[cmd_name](update, context)
