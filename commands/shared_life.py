@@ -38,8 +38,7 @@ def build_grocery_ui(lang: str = 'en'):
         for doc in docs:
             item_name = doc['item']
             item_id = str(doc['_id'])
-            safe_item = html.escape(item_name)
-            keyboard.append([InlineKeyboardButton(f"{safe_item}", callback_data=f"g_rm_{item_id}")])
+            keyboard.append([InlineKeyboardButton(f"{item_name}", callback_data=f"g_rm_{item_id}")])
             
         keyboard.append([InlineKeyboardButton(empty_btn, callback_data="g_empty")])
         

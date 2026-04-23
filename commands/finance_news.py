@@ -69,7 +69,7 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         lang = 'en'
         context.user_data['lang'] = 'en'
 
-    status_text = "<i>Analyse de l'actualité mondiale...</i> ⏳" if lang == 'fr' else "<i>Analyzing global headlines...</i> ⏳"
+    status_text = "<i>Analyse de l'actualité...</i> ⏳" if lang == 'fr' else "<i>Analyzing headlines...</i> ⏳"
     status_msg = await update.message.reply_text(status_text, parse_mode=ParseMode.HTML)
     
     raw_news = []
@@ -109,7 +109,7 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         1. LANGUAGE OVERRIDE: You MUST write the ENTIRE briefing natively in {target_lang}. Translate the English headlines into {target_lang} before summarizing. Do NOT drift into English if {target_lang} is FRENCH.
         2. OBJECTIVITY: Neutral, journalistic tone.
         3. NO HALLUCINATION: Only use the provided headlines.
-        4. CASING: Use normal **Sentence Case** only. Capitalize the first word of sentences and proper nouns. Do NOT use Title Case for every word.
+        4. CASING: Use normal **Sentence Case** only. Capitalize the first word of sentences and proper nouns (i.e. France, or Lufthansa). Do NOT use Title Case for every word.
         5. FORMATTING: Plain text only. No Markdown (no asterisks).
         6. EMOJIS: Include exactly 2 relevant emojis at the end.
 

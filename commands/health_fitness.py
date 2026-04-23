@@ -51,7 +51,7 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     prompt = f"""
     [ROLE]
-    You are an elite, highly knowledgeable personal trainer and sports scientist.
+    You are an elite Sports Scientist and Olympic-level Coach specializing in endurance and periodization.
 
     [CONTEXT]
     - Today's Date: {current_date}
@@ -59,25 +59,18 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     - Recent Strava History:
     {history_text}
 
-    [TERMINOLOGY & LOCALIZATION]
-    If writing in French, use natural, professional sports terminology.
-    You MUST use these specific translations for your headers:
-    - "Workout Plan" = "Plan d'entraînement"
-    - "Recent Training History" = "Historique récent"
-    - "Warm-up" = "Échauffement"
-    - "Main Set" = "Série principale"
-    - "Cool-down" = "Récupération"
-
     [TASK]
-    Design a tailored, one-off workout session based on the goal and current fatigue levels.
+    Design a tailored workout or recovery plan. You must analyze the "Client Request" for any mention of an upcoming race, competition, or "big event".
 
     [STRICT INSTRUCTIONS]
-    1. LANGUAGE OVERRIDE: You MUST write the ENTIRE workout plan natively in {target_lang}. Translate the Strava history context into {target_lang} if necessary. Do not drift into English if {target_lang} is FRENCH.
-    2. FATIGUE ANALYSIS: If the Strava history shows a heavy session yesterday, suggest a recovery-focused or complementary workout.
-    3. FORMATTING: Use Normal Sentence Case or Title Case for headers. Do NOT use all caps (NO MAJUSCULES). 
-    4. PLAIN TEXT ONLY: No HTML. No Markdown (no asterisks).
-    5. PACE INTELLIGENCE: Prescribe specific target paces (min/km for run, min/100m for swim).
-    6. EMOJIS: Use exactly 3 emojis total.
+    1. TAPERING LOGIC (CRITICAL): If the user mentions a race or event happening in the next 1-7 days:
+       - DO NOT prescribe high-intensity intervals or long, exhausting runs.
+       - Focus on "Tapering": short "shake-out" runs (20-30 min), mobility, and total rest.
+       - Prioritize muscle glycogen storage and central nervous system recovery.
+    2. FATIGUE ANALYSIS: Compare the Strava history (volumes/intensities) with the request. If they are overtrained, mandate rest.
+    3. LANGUAGE OVERRIDE: Write natively in {target_lang}. Translate headers as: "Plan d'entraînement", "Historique récent", "Échauffement", "Série principale", "Récupération".
+    4. PACE INTELLIGENCE: Use min/km for running. If tapering, paces should be "Zone 1/Zone 2" (very easy).
+    5. FORMATTING: Plain text only. No Markdown. Exactly 3 emojis total.
 
     [OUTPUT STRUCTURE]
     🏃‍♂️ [Translated 'Workout Plan']
@@ -111,17 +104,22 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return None
-    logger.info(f"▶️ User {update.effective_chat.id} triggered /stats")
     
-    user_request = " ".join(context.args)
+    raw_text = update.message.text if update.message and update.message.text else ""
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /stats with: {raw_text}")
+    
+    user_request = " ".join(context.args).strip()
+    if user_request.lower() in ["stats", "ststa", "stat", "stata"]:
+        user_request = ""
+
     lang = context.user_data.get('lang', 'fr')
     
-    if user_request:
-        req_lower = user_request.lower()
-        if any(w in req_lower for w in ["bilan", "semaine", "résumé", "performance"]):
+    if raw_text:
+        req_lower = raw_text.lower()
+        if any(w in req_lower for w in ["bilan", "semaine", "résumé", "performance", "stats"]):
             lang = 'fr'
             context.user_data['lang'] = 'fr'
-        elif any(w in req_lower for w in ["weekly", "summary", "review"]):
+        elif any(w in req_lower for w in ["weekly", "summary", "review", "stat"]):
             lang = 'en'
             context.user_data['lang'] = 'en'
 
@@ -182,7 +180,7 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             raw_stats_summary += f"- {sport}: {data['count']} sessions, {data['distance']:.1f}km\n"
 
         target_lang = "FRENCH" if lang == 'fr' else "ENGLISH"
-        intent = user_request if user_request else "Standard 7-day performance review"
+        intent = user_request if (user_request and len(user_request) > 2) else "Standard 7-day performance review"
 
         prompt = f"""
         [ROLE]
@@ -194,39 +192,38 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         {raw_stats_summary}
 
         [TERMINOLOGY & LOCALIZATION]
-        If writing in French, use professional sports terminology. Required translations:
+        Use professional terminology. You MUST use these exact translations for headers:
         - "7-day Performance Review" = "Bilan Hebdomadaire"
         - "Total Active Time" = "Temps d'activité total"
         - "Breakdown by Sport" = "Répartition par sport"
-        - "Run" or "Running" = "Course à pied"
-        - "Workout" or "Weight Training" = "Musculation"
         - "Coach's Note" = "Note du coach"
 
         [TASK]
         Summarize the stats and provide a 2-sentence expert review. 
 
         [STRICT INSTRUCTIONS]
-        1. LANGUAGE OVERRIDE: You MUST write the ENTIRE summary natively in {target_lang}. Translate the Raw Stats (like "Run", "Activities", "Load") into {target_lang}. Do not drift into English if {target_lang} is FRENCH.
-        2. RECOVERY ADVICE: If Load > 400, insist on a rest day.
-        3. FORMATTING: Use **Sentence Case** or **Title Case** for headers. Do NOT use all caps. 
-        4. PLAIN TEXT ONLY: Absolutely NO HTML tags. No Markdown (no asterisks).
+        1. LANGUAGE OVERRIDE: Write natively in {target_lang}. Translate raw sport types (e.g., 'WeightTraining' -> 'Musculation').
+        2. NO PREAMBLE: Start directly with the header.
+        3. FORMATTING: Use **Sentence Case**. No Markdown. Plain text only.
+        4. DIVIDER: Use ────────────────────── after the first title.
 
         [OUTPUT STRUCTURE]
-        📊 [Translated '7-day Performance Review']
+        Bilan Hebdomadaire
         ──────────────────────
-        [List the total workouts, time, and load]
+        [Total stats summary]
 
-        🏅 [Translated 'Breakdown by Sport']
-        [List the sports]
+        Répartition par sport
+        [List]
 
-        [Translated 'Coach's Note']
-        [Your 2-sentence review]
+        Note du coach
+        [Your review]
         """
         
         ai_review = await ask_llm(prompt)
         clean_review = ai_review.replace("*", "").strip()
         
-        await status_msg.edit_text(clean_review)
+        final_display = f"📊 {clean_review}"
+        await status_msg.edit_text(final_display)
         return clean_review
         
     except Exception as e:

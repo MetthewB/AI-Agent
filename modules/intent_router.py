@@ -140,10 +140,20 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Intercepts standard text messages and routes them without needing /commands."""
     if not is_authorized(update): return
     
-    user_text = update.message.text
-    if not user_text: return
+    raw_text = update.message.text
+    if not raw_text: return
 
-    if user_text.strip().lower() == "/reset":
+    user_text = raw_text.strip().lower()
+
+    if user_text == "chat":
+        context.user_data['lang'] = 'fr'
+        return await cat_command(update, context)
+    
+    if user_text == "cat":
+        context.user_data['lang'] = 'en'
+        return await cat_command(update, context)
+
+    if user_text == "/reset":
         context.user_data['chat_history'] = []
         await update.message.reply_text("🧹 <i>Memory wiped! What do you want to talk about next?</i>", parse_mode=ParseMode.HTML)
         return
