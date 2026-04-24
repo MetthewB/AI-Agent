@@ -284,7 +284,7 @@ async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     [OUTPUT STRUCTURE]
     [Emoji] [Catchy recipe title]
-    ──────────────────────
+    ─────────────────
     Ingredients:
     • [Item 1]
     

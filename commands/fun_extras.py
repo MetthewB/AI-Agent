@@ -92,7 +92,7 @@ async def dateidea_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     [OUTPUT STRUCTURE]
     [Catchy Title] - {cost_label}: [Free/$/$$/$$$]
-    ──────────────────────
+    ─────────────────
     [A 2-sentence engaging description explaining the activity and why it fits the weather and vibe.]
     """
     
@@ -256,7 +256,7 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [OUTPUT STRUCTURE]
     🎬 Title (Year)
     {genre_label}: [Value]
-    ──────────────────────
+    ─────────────────
     {pitch_label}: [1-2 sentence synopsis in {target_lang}]
     """
     
@@ -370,7 +370,7 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [OUTPUT STRUCTURE]
     [♫ Title - Artist] or [♫ Playlist Name]
     {genre_label}: [Value]
-    ──────────────────────
+    ─────────────────
     {vibe_label}: [1-2 sentence pitch in {target_lang}]
     [If Playlist: List the 5 tracks here]
     """
@@ -496,7 +496,7 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [OUTPUT STRUCTURE]
     📖 Title by Author (Year)
     {genre_label}: [Value]
-    ──────────────────────
+    ─────────────────
     {pitch_label}: [1-2 sentence pitch in {target_lang}]
     """
     

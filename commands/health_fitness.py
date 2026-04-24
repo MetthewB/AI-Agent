@@ -74,7 +74,7 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     [OUTPUT STRUCTURE]
     🏃‍♂️ [Translated 'Workout Plan']
-    ──────────────────────
+    ─────────────────
     📊 [Translated 'Recent Training History']
     • [History Summary]
 
@@ -205,11 +205,11 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         1. LANGUAGE OVERRIDE: Write natively in {target_lang}. Translate raw sport types (e.g., 'WeightTraining' -> 'Musculation').
         2. NO PREAMBLE: Start directly with the header.
         3. FORMATTING: Use **Sentence Case**. No Markdown. Plain text only.
-        4. DIVIDER: Use ────────────────────── after the first title.
+        4. DIVIDER: Use ───────────────── after the first title.
 
         [OUTPUT STRUCTURE]
         Bilan Hebdomadaire
-        ──────────────────────
+        ─────────────────
         [Total stats summary]
 
         Répartition par sport

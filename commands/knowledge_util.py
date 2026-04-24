@@ -1,3 +1,4 @@
+import re
 import html
 import asyncio
 import logging
@@ -86,7 +87,7 @@ async def research_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         clean_analysis = analysis.replace("*", "").strip()
         header_text = "Recherche" if lang == 'fr' else "Research"
         
-        final_text = f"📝 <b>{header_text} : {html.escape(query.title())}</b>\n──────────────────────\n{clean_analysis}"
+        final_text = f"📝 <b>{header_text} : {html.escape(query.title())}</b>\n─────────────────\n{clean_analysis}"
         await status_msg.edit_text(final_text, parse_mode=ParseMode.HTML)
         return clean_analysis
         
@@ -118,21 +119,30 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_day = 0
     time_context = "Current"
     
-    time_phrases = {
-        2: ["après demain", "apres demain", "après-demain", "apres-demain", "day after tomorrow", "dans 3 jours", "3 days", "dans 2 jours", "2 days"],
-        1: ["demain", "tomorrow", "dans 1 jour"],
-        0: ["aujourd'hui", "today", "maintenant", "now"]
-    }
-    
-    for day_index, phrases in time_phrases.items():
-        for phrase in phrases:
-            if phrase in raw_args:
-                target_day = day_index
-                time_context = ["Today", "Tomorrow", "Day after tomorrow"][day_index]
-                raw_args = raw_args.replace(phrase, "")
-                break 
+    days_match = re.search(r'(in|dans)\s*(\d+)\s*(days|jours|jour|day)', raw_args)
+    if days_match:
+        requested_days = int(days_match.group(2))
+        target_day = min(requested_days, 2)
+        time_context = "Day after tomorrow" if target_day == 2 else ("Tomorrow" if target_day == 1 else "Today")
+        raw_args = raw_args.replace(days_match.group(0), "")
+    else:
+        time_phrases = {
+            2: ["après demain", "apres demain", "après-demain", "apres-demain", "day after tomorrow"],
+            1: ["demain", "tomorrow"],
+            0: ["aujourd'hui", "today", "maintenant", "now"]
+        }
+        for day_index, phrases in time_phrases.items():
+            for phrase in phrases:
+                if phrase in raw_args:
+                    target_day = day_index
+                    time_context = ["Today", "Tomorrow", "Day after tomorrow"][day_index]
+                    raw_args = raw_args.replace(phrase, "")
+                    break 
 
-    fluff_words = ["quel", "temps", "fera", "t-il", "t", "il", "à", "a", "in", "for", "pour", "le", "la", "the", "on", "de", "dans", "jours", "jour"]
+    fluff_words = [
+        "quel", "temps", "fera", "t-il", "t", "il", "à", "a", "in", "for", "pour", "le", "la", "the", "on", "de",
+        "what", "whats", "what's", "is", "weather", "météo", "meteo", "forecast", "how", "like"
+    ]
     clean_words = [w for w in raw_args.split() if w not in fluff_words]
     city_query = " ".join(clean_words).strip()
     
@@ -175,7 +185,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             cond_morning = forecast_data['hourly'][3]['weatherDesc'][0]['value']
             cond_afternoon = forecast_data['hourly'][5]['weatherDesc'][0]['value']
             
-            temp_str = f"High: {temp_max}°C / Low: {temp_min}°C"
+            temp_str = f"Lowest: {temp_min}°C, Highest: {temp_max}°C"
             if cond_morning == cond_afternoon:
                 condition = cond_afternoon
             else:
@@ -197,9 +207,9 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         Write a short, high-personality weather report based on the "Target Time" and "Temperatures". Tell them how it will feel and give a specific outfit/activity recommendation.
 
         [STRICT INSTRUCTIONS]
-        1. LANGUAGE OVERRIDE: You MUST write the ENTIRE response natively in {target_lang}. Translate the Sky Conditions.
+        1. LANGUAGE OVERRIDE: You MUST write the ENTIRE response natively in {target_lang}. CRITICAL: You must explicitly translate English sky conditions (like 'partly cloudy', 'overcast') into natural {target_lang}.
         2. STRUCTURE: Exactly 2 sentences. No intros.
-        3. DATA USAGE: If a High and Low temperature are provided, you MUST explicitly mention BOTH in your report (e.g., "allant de X à Y").
+        3. DATA USAGE: If a High and Low temperature are provided, you MUST explicitly mention BOTH in your report, ordering from lowest to highest (e.g., "allant de 9°C à 21°C").
         4. TEMPORAL ACCURACY: If the Target Time is tomorrow or later, use future tense (e.g., "Il fera...").
         5. CASING: Use normal **Sentence Case** only. Do not use Title Case for every word.
         6. FORMATTING: Plain text ONLY. No Markdown. 
@@ -288,7 +298,7 @@ async def remind_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             else:
                 display_text = f"🕒 Got it! I will remind you to <b>{html.escape(message)}</b> in {time_display}."
             
-        final_ui = f"🕒 <b>{header}</b>\n──────────────────────\n{display_text}"
+        final_ui = f"🕒 <b>{header}</b>\n─────────────────\n{display_text}"
         await update.message.reply_text(final_ui, parse_mode=ParseMode.HTML)
         return f"Reminder set for {time_display}"
 

@@ -44,7 +44,7 @@ async def portfolio_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             logger.error(f"❌ Portfolio Error for {ticker}: {e}")
             stats.append(f"• <b>{html.escape(name)}</b>:\n  <code>⚠️ Fetch failed</code>")
     
-    header = "📊 <b>Live Market Portfolio</b>\n──────────────────────\n"
+    header = "📊 <b>Live Market Portfolio</b>\n─────────────────\n"
     body = "\n".join(stats)
     full_response = f"{header}{body}"
     
@@ -125,7 +125,7 @@ async def news_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         else:
             header_text = "Bilan Géopolitique" if lang == 'fr' else "Geopolitical Briefing"
         
-        final_text = f"📰 <b>{html.escape(header_text)}</b>\n──────────────────────\n{clean_summary}"
+        final_text = f"📰 <b>{html.escape(header_text)}</b>\n─────────────────\n{clean_summary}"
         await status_msg.edit_text(final_text, parse_mode=ParseMode.HTML)
         return clean_summary
 
