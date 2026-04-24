@@ -119,18 +119,38 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_day = 0
     time_context = "Current"
     limitation_context = ""
+    requested_days = None
+
+    days_match = re.search(r'(?:in|dans)?\s*(\d+)\s*(?:days|jours|jour|day)\b', raw_args)
     
-    days_match = re.search(r'(in|dans)\s*(\d+)\s*(days|jours|jour|day)', raw_args)
     if days_match:
-        requested_days = int(days_match.group(2))
+        requested_days = int(days_match.group(1))
+        raw_args = raw_args.replace(days_match.group(0), "")
+    else:
+        weekdays = {
+            "lundi": 0, "monday": 0, "mardi": 1, "tuesday": 1, 
+            "mercredi": 2, "wednesday": 2, "jeudi": 3, "thursday": 3, 
+            "vendredi": 4, "friday": 4, "samedi": 5, "saturday": 5, 
+            "dimanche": 6, "sunday": 6
+        }
+        today_weekday = datetime.datetime.now().weekday()
+        
+        for day_word, day_idx in weekdays.items():
+            if re.search(rf'\b{day_word}\b', raw_args):
+                delta = (day_idx - today_weekday) % 7
+                if delta == 0: delta = 7
+                requested_days = delta
+                
+                raw_args = re.sub(rf'\b(ce|next|prochain|this|on|le|pour)?\s*{day_word}\b', '', raw_args)
+                break
+
+    if requested_days is not None:
         if requested_days > 2:
             target_day = 2
-            limitation_context = f"IMPORTANT LIMITATION: The user asked for {requested_days} days ahead, but your radar only goes up to 2 days. You MUST playfully mention that you can't look that far ahead, and are giving the 2-day forecast instead."
+            limitation_context = f"IMPORTANT LIMITATION: The user asked for a forecast {requested_days} days ahead, but your radar only goes up to 2 days. You MUST playfully mention that you can't look that far ahead, and are giving the 2-day forecast instead."
         else:
             target_day = requested_days
-            
         time_context = "Day after tomorrow" if target_day == 2 else ("Tomorrow" if target_day == 1 else "Today")
-        raw_args = raw_args.replace(days_match.group(0), "")
     else:
         time_phrases = {
             2: ["après demain", "apres demain", "après-demain", "apres-demain", "day after tomorrow"],
@@ -147,7 +167,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     fluff_words = [
         "quel", "temps", "fera", "t-il", "t", "il", "à", "a", "in", "for", "pour", "le", "la", "the", "on", "de",
-        "what", "whats", "what's", "is", "weather", "météo", "meteo", "forecast", "how", "like"
+        "what", "whats", "what's", "is", "weather", "météo", "meteo", "forecast", "how", "like", "ce", "next", "prochain", "this"
     ]
     clean_words = [w for w in raw_args.split() if w not in fluff_words]
     city_query = " ".join(clean_words).strip()
@@ -216,7 +236,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         [STRICT INSTRUCTIONS]
         1. LANGUAGE OVERRIDE: You MUST write the ENTIRE response natively in {target_lang}. CRITICAL: You must explicitly translate English sky conditions (like 'partly cloudy', 'overcast') into natural {target_lang}.
-        2. STRUCTURE: Exactly 2 sentences. No intros.
+        2. STRUCTURE: Exactly 2 sentences. No intros. (3 sentences max if a limitation is triggered).
         3. DATA USAGE: If a High and Low temperature are provided, you MUST explicitly mention BOTH in your report, ordering from lowest to highest (e.g., "allant de 9°C à 21°C").
         4. TEMPORAL ACCURACY: If the Target Time is tomorrow or later, use future tense (e.g., "Il fera...").
         5. CASING: Use normal **Sentence Case** only. Do not use Title Case for every word.

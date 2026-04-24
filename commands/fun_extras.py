@@ -162,23 +162,27 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return None
     
     lang = context.user_data.get('lang', 'fr')
+    full_user_input = update.message.text if update.message and update.message.text else ""
     
     query = update.callback_query
     if query:
         await query.answer()
         logger.info(f"▶️ User {update.effective_chat.id} triggered re-roll for /movie")
         keywords = context.user_data.get('last_movie', 'a great movie')
+        is_list = context.user_data.get('last_movie_is_list', False)
     else:
         logger.info(f"▶️ User {update.effective_chat.id} triggered /movie")
         keywords = " ".join(context.args)
         context.user_data['last_movie'] = keywords
+        is_list = any(w in full_user_input.lower() or w in keywords.lower() for w in ["list", "liste", "top", "franchise", "saga", "marathon"])
+        context.user_data['last_movie_is_list'] = is_list
 
-    if keywords and not query:
-        kw_lower = keywords.lower()
-        if any(w in kw_lower for w in ["film", "série", "avec", "un", "une", "horreur", "comédie", "drôle", "peur"]):
+    if full_user_input and not query:
+        kw_lower = full_user_input.lower()
+        if any(w in kw_lower.split() for w in ["film", "série", "avec", "un", "une", "horreur", "comédie", "drôle", "peur", "non", "veux", "liste", "saga", "marathon"]):
             lang = 'fr'
             context.user_data['lang'] = 'fr'
-        elif any(w in kw_lower for w in ["movie", "show", "with", "a", "an", "horror", "comedy", "funny", "scary"]):
+        elif any(w in kw_lower.split() for w in ["movie", "show", "with", "a", "an", "horror", "comedy", "funny", "scary", "want", "no", "i", "list", "top", "franchise", "marathon"]):
             lang = 'en'
             context.user_data['lang'] = 'en'
         
@@ -188,14 +192,14 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "⚠️ <b>Utilisation :</b> /movie [ambiance/genre/acteurs]\n"
                 "<i>Exemples :</i>\n"
                 "• <code>/movie film qui fait peur avec des chiens mais une fin heureuse</code>\n"
-                "• <code>/movie film d'animation avec un chat</code>"
+                "• <code>/movie marathon de science-fiction</code>"
             )
         else:
             usage_text = (
                 "⚠️ <b>Usage:</b> /movie [vibe/genre/actors]\n"
                 "<i>Examples:</i>\n"
                 "• <code>/movie scary with dogs but a happy ending</code>\n"
-                "• <code>/movie animated movie with a cat</code>"
+                "• <code>/movie top 3 sci-fi movies</code>"
             )
         await update.effective_message.reply_text(usage_text, parse_mode=ParseMode.HTML)
         return None
@@ -220,17 +224,28 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if 'history_movie' not in context.user_data:
         context.user_data['history_movie'] = []
         
-    context.user_data['history_movie'] = [
+    valid_history = [
         item for item in context.user_data['history_movie'] 
         if (current_time - item['timestamp']) < one_week_seconds
     ]
+    context.user_data['history_movie'] = valid_history
     
-    history_titles = [item['title'] for item in context.user_data['history_movie']]
+    history_titles = [item['title'] for item in valid_history]
     history_text = "\n".join(f"- {t}" for t in history_titles) if history_titles else "None."
     
     target_lang = "FRENCH" if lang == 'fr' else "ENGLISH"
     genre_label = "Genre"
     pitch_label = "Synopsis" if lang == 'fr' else "Pitch"
+
+    chat_history = context.user_data.get('chat_history', [])
+    recent_chat = "\n".join(chat_history[-4:]) if chat_history else "None."
+
+    if is_list:
+        task_instruction = "The user explicitly wants a LIST, FRANCHISE, or MARATHON. Provide 3-5 iconic movies or shows formatted as a list."
+        output_format = f"🎬 [Catchy Theme or Franchise Name]\n{genre_label}: [Value]\n─────────────────\n{pitch_label}: [1-2 sentence pitch in {target_lang}]\n\n🍿 [Movie 1 Title] (Year)\n🍿 [Movie 2 Title] (Year)\n🍿 [Movie 3 Title] (Year)"
+    else:
+        task_instruction = "Suggest ONE perfect movie or TV series based on the user's intent."
+        output_format = f"🎬 [Title] (Year)\n{genre_label}: [Value]\n─────────────────\n{pitch_label}: [1-2 sentence synopsis in {target_lang}]"
     
     prompt = f"""
     [ROLE]
@@ -238,26 +253,22 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     [CONTEXT]
     User Request: "{keywords}"
-
-    [DO NOT RECOMMEND - RECENT SUGGESTIONS]
-    You MUST NOT suggest any of the following movies or series. They have already been recommended recently:
-    {history_text}
+    Recent Conversation Context:
+    {recent_chat}
+    Recent Recommendations (Avoid these): {history_text}
 
     [TASK]
-    Suggest ONE perfect movie or series based on the TRUE MEANING of the request. 
+    {task_instruction}
+    CRITICAL: Use the "Recent Conversation Context" to remember the genre or vibe if the current "User Request" is just a brief correction like "no, I want a top 3 list".
 
     [STRICT INSTRUCTIONS]
-    1. LANGUAGE OVERRIDE: You MUST write the ENTIRE recommendation natively in {target_lang}. Do not drift into English if {target_lang} is FRENCH.
-    2. SEMANTIC CURATION: Interpret the *vibe*, *plot*, or *meaning* of the request. DO NOT just search for a movie with the user's exact words in the title.
-    3. NO HALLUCINATIONS: You must recommend a REAL, existing, released movie or TV series. Do not invent titles, directors, or plots.
-    4. CASING: Use normal **Sentence Case** for the {pitch_label}. Do NOT use Title Case for every word in the description.
-    5. FORMATTING: Plain text only. No Markdown (no asterisks). Do not use brackets [] for the labels.
+    1. LANGUAGE OVERRIDE: You MUST write the ENTIRE recommendation natively in {target_lang}.
+    2. NO HALLUCINATIONS: You must recommend REAL, existing, released movies or TV series.
+    3. CASING: Use normal **Sentence Case** for the {pitch_label}. Do NOT use Title Case for every word in the description.
+    4. FORMATTING: Plain text only. No Markdown (no asterisks).
 
     [OUTPUT STRUCTURE]
-    🎬 Title (Year)
-    {genre_label}: [Value]
-    ─────────────────
-    {pitch_label}: [1-2 sentence synopsis in {target_lang}]
+    {output_format}
     """
     
     suggestion = await ask_llm(prompt) 
@@ -294,10 +305,13 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         logger.info(f"▶️ User {update.effective_chat.id} triggered re-roll for /music")
         keywords = context.user_data.get('last_music', 'chill acoustic')
+        is_playlist = context.user_data.get('last_music_is_playlist', False)
     else:
         logger.info(f"▶️ User {update.effective_chat.id} triggered /music")
         keywords = " ".join(context.args)
         context.user_data['last_music'] = keywords
+        is_playlist = "playlist" in full_user_input.lower() or "playlist" in keywords.lower()
+        context.user_data['last_music_is_playlist'] = is_playlist
 
     if full_user_input and not query:
         kw_lower = full_user_input.lower()
@@ -350,8 +364,6 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     chat_history = context.user_data.get('chat_history', [])
     recent_chat = "\n".join(chat_history[-4:]) if chat_history else "None."
-
-    is_playlist = "playlist" in full_user_input.lower() or "playlist" in keywords.lower()
     
     if is_playlist:
         task_instruction = "The user explicitly wants a PLAYLIST. Provide exactly 5 iconic tracks formatted as a list."
@@ -417,10 +429,13 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.answer()
         logger.info(f"▶️ User {update.effective_chat.id} triggered re-roll for /book")
         keywords = context.user_data.get('last_book', 'a cozy mystery')
+        is_list = context.user_data.get('last_book_is_list', False)
     else:
         logger.info(f"▶️ User {update.effective_chat.id} triggered /book")
         keywords = " ".join(context.args)
         context.user_data['last_book'] = keywords
+        is_list = any(w in full_user_input.lower() or w in keywords.lower() for w in ["list", "liste", "series", "série", "top", "trilogy", "trilogie"])
+        context.user_data['last_book_is_list'] = is_list
 
     if full_user_input and not query:
         kw_lower = full_user_input.lower()
@@ -477,7 +492,6 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     chat_history = context.user_data.get('chat_history', [])
     recent_chat = "\n".join(chat_history[-4:]) if chat_history else "None."
-    is_list = any(w in full_user_input.lower() or w in keywords.lower() for w in ["list", "liste", "series", "série", "top", "trilogy", "trilogie"])
     
     if is_list:
         task_instruction = "The user explicitly wants a LIST or SERIES. Provide 3-5 iconic books formatted as a list."
