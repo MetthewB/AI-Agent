@@ -2,6 +2,8 @@ import html
 import asyncio
 import logging
 import requests
+import datetime
+from zoneinfo import ZoneInfo
 from bs4 import BeautifulSoup
 from telegram import Update
 from telegram.ext import ContextTypes
@@ -116,21 +118,27 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_day = 0
     time_context = "Current"
     
-    if any(w in raw_args for w in ["après-demain", "apres-demain", "day after tomorrow"]):
-        target_day = 2
-        time_context = "Day after tomorrow"
-        for w in ["après-demain", "apres-demain", "day after tomorrow"]: raw_args = raw_args.replace(w, "")
-    elif any(w in raw_args for w in ["demain", "tomorrow"]):
-        target_day = 1
-        time_context = "Tomorrow"
-        for w in ["demain", "tomorrow"]: raw_args = raw_args.replace(w, "")
-    elif any(w in raw_args for w in ["aujourd'hui", "today"]):
-        target_day = 0
-        time_context = "Today"
-        for w in ["aujourd'hui", "today"]: raw_args = raw_args.replace(w, "")
+    time_phrases = {
+        2: ["après demain", "apres demain", "après-demain", "apres-demain", "day after tomorrow", "dans 3 jours", "3 days", "dans 2 jours", "2 days"],
+        1: ["demain", "tomorrow", "dans 1 jour"],
+        0: ["aujourd'hui", "today", "maintenant", "now"]
+    }
+    
+    for day_index, phrases in time_phrases.items():
+        for phrase in phrases:
+            if phrase in raw_args:
+                target_day = day_index
+                time_context = ["Today", "Tomorrow", "Day after tomorrow"][day_index]
+                raw_args = raw_args.replace(phrase, "")
+                break 
 
-    clean_words = [w for w in raw_args.split() if w not in ["à", "a", "in", "for", "pour", "le", "la", "the", "on", "de"]]
-    city_query = " ".join(clean_words) or "Lausanne"
+    fluff_words = ["quel", "temps", "fera", "t-il", "t", "il", "à", "a", "in", "for", "pour", "le", "la", "the", "on", "de", "dans", "jours", "jour"]
+    clean_words = [w for w in raw_args.split() if w not in fluff_words]
+    city_query = " ".join(clean_words).strip()
+    
+    if not city_query:
+        city_query = "Lausanne"
+        
     display_name = city_query.title()
     safe_display = html.escape(display_name)
     
@@ -158,14 +166,20 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         if target_day == 0:
             current = data['current_condition'][0]
-            temp_str = f"{current['temp_C']}°C"
+            temp_str = f"Current Temp: {current['temp_C']}°C"
             condition = current['weatherDesc'][0]['value']
         else:
             forecast_data = data['weather'][target_day]
             temp_max = forecast_data['maxtempC']
             temp_min = forecast_data['mintempC']
+            cond_morning = forecast_data['hourly'][3]['weatherDesc'][0]['value']
+            cond_afternoon = forecast_data['hourly'][5]['weatherDesc'][0]['value']
+            
             temp_str = f"High: {temp_max}°C / Low: {temp_min}°C"
-            condition = forecast_data['hourly'][4]['weatherDesc'][0]['value']
+            if cond_morning == cond_afternoon:
+                condition = cond_afternoon
+            else:
+                condition = f"Morning: {cond_morning}, Afternoon: {cond_afternoon}"
         
         target_lang = "FRENCH" if lang == 'fr' else "ENGLISH"
         
@@ -176,19 +190,20 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         [CONTEXT]
         Location: {display_name}
         Target Time: {time_context}
-        Temperature/Forecast: {temp_str}
+        Temperatures: {temp_str}
         Sky Conditions: {condition}
 
         [TASK]
-        Write a short, high-personality weather report based on the "Target Time" and "Temperature/Forecast". Tell them how it will feel and give a specific outfit/activity recommendation appropriate for that day.
+        Write a short, high-personality weather report based on the "Target Time" and "Temperatures". Tell them how it will feel and give a specific outfit/activity recommendation.
 
         [STRICT INSTRUCTIONS]
-        1. LANGUAGE OVERRIDE: You MUST write the ENTIRE response natively in {target_lang}. Translate the Sky Conditions into {target_lang}. Do not drift into English.
+        1. LANGUAGE OVERRIDE: You MUST write the ENTIRE response natively in {target_lang}. Translate the Sky Conditions.
         2. STRUCTURE: Exactly 2 sentences. No intros.
-        3. TEMPORAL ACCURACY: If the Target Time is tomorrow, use future tense (e.g., "Il fera...").
-        4. CASING: Use normal **Sentence Case** only (capitalize the first word of the sentence and proper nouns like city names). Do not use Title Case for every word.
-        5. FORMATTING: Plain text ONLY. No Markdown (no asterisks). 
-        6. EMOJIS: Include exactly 2 emojis at the very end.
+        3. DATA USAGE: If a High and Low temperature are provided, you MUST explicitly mention BOTH in your report (e.g., "allant de X à Y").
+        4. TEMPORAL ACCURACY: If the Target Time is tomorrow or later, use future tense (e.g., "Il fera...").
+        5. CASING: Use normal **Sentence Case** only. Do not use Title Case for every word.
+        6. FORMATTING: Plain text ONLY. No Markdown. 
+        7. EMOJIS: Include exactly 2 emojis at the very end.
 
         [OUTPUT STRUCTURE]
         [Sentence 1]. [Sentence 2] [Emoji][Emoji]
@@ -201,7 +216,7 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if lang == 'fr' and target_day == 1: time_indicator = " (Demain)"
         if lang == 'fr' and target_day == 2: time_indicator = " (Après-demain)"
         
-        final_text = f"🌍 <b>{header_text}{time_indicator}</b>\n──────────────────────\n{clean_forecast}" 
+        final_text = f"🌍 <b>{header_text}{time_indicator}</b>\n─────────────────\n{clean_forecast}" 
         await status_msg.edit_text(final_text, parse_mode=ParseMode.HTML)
         
         return f"Weather in {display_name} ({time_context}): {clean_forecast}"
@@ -321,8 +336,11 @@ async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_text = "🕒 <i>Mattou regarde sa montre...</i>" if lang == 'fr' else "🕒 <i>Mattou checks its clock...</i>"
     status_msg = await update.message.reply_text(status_text, parse_mode=ParseMode.HTML)
     
-    import datetime
-    current_time_str = datetime.datetime.now().strftime("%A, %B %d, %Y - %H:%M")
+    try:
+        tz = ZoneInfo("Europe/Zurich")
+        current_time_str = datetime.datetime.now(tz).strftime("%A, %B %d, %Y - %H:%M")
+    except Exception:
+        current_time_str = datetime.datetime.now().strftime("%A, %B %d, %Y - %H:%M")
     
     target_lang = "FRENCH" if lang == 'fr' else "ENGLISH"
     
