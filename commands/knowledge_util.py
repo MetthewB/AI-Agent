@@ -118,11 +118,17 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_args = " ".join(context.args).lower()
     target_day = 0
     time_context = "Current"
+    limitation_context = ""
     
     days_match = re.search(r'(in|dans)\s*(\d+)\s*(days|jours|jour|day)', raw_args)
     if days_match:
         requested_days = int(days_match.group(2))
-        target_day = min(requested_days, 2)
+        if requested_days > 2:
+            target_day = 2
+            limitation_context = f"IMPORTANT LIMITATION: The user asked for {requested_days} days ahead, but your radar only goes up to 2 days. You MUST playfully mention that you can't look that far ahead, and are giving the 2-day forecast instead."
+        else:
+            target_day = requested_days
+            
         time_context = "Day after tomorrow" if target_day == 2 else ("Tomorrow" if target_day == 1 else "Today")
         raw_args = raw_args.replace(days_match.group(0), "")
     else:
@@ -202,9 +208,11 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         Target Time: {time_context}
         Temperatures: {temp_str}
         Sky Conditions: {condition}
+        {limitation_context}
 
         [TASK]
         Write a short, high-personality weather report based on the "Target Time" and "Temperatures". Tell them how it will feel and give a specific outfit/activity recommendation.
+        If there is an "IMPORTANT LIMITATION" in the Context, your very first sentence MUST address it naturally.
 
         [STRICT INSTRUCTIONS]
         1. LANGUAGE OVERRIDE: You MUST write the ENTIRE response natively in {target_lang}. CRITICAL: You must explicitly translate English sky conditions (like 'partly cloudy', 'overcast') into natural {target_lang}.

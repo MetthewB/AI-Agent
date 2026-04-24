@@ -287,7 +287,8 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return None
     
     lang = context.user_data.get('lang', 'fr')
-    
+    full_user_input = update.message.text if update.message and update.message.text else ""
+
     query = update.callback_query
     if query:
         await query.answer()
@@ -298,12 +299,12 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keywords = " ".join(context.args)
         context.user_data['last_music'] = keywords
 
-    if keywords and not query:
-        kw_lower = keywords.lower()
-        if any(w in kw_lower for w in ["musique", "chanson", "pour", "avec", "de", "détente", "sport", "ambiance", "playlist"]):
+    if full_user_input and not query:
+        kw_lower = full_user_input.lower()
+        if any(w in kw_lower.split() for w in ["musique", "chanson", "pour", "avec", "de", "détente", "sport", "ambiance", "non", "veux"]):
             lang = 'fr'
             context.user_data['lang'] = 'fr'
-        elif any(w in kw_lower for w in ["music", "song", "for", "with", "chill", "workout", "vibe", "playlist"]):
+        elif any(w in kw_lower.split() for w in ["music", "song", "for", "with", "chill", "workout", "vibe", "want", "no", "i"]):
             lang = 'en'
             context.user_data['lang'] = 'en'
         
@@ -346,6 +347,18 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     target_lang = "FRENCH" if lang == 'fr' else "ENGLISH"
     genre_label = "Genre"
     vibe_label = "Ambiance" if lang == 'fr' else "Vibe"
+    
+    chat_history = context.user_data.get('chat_history', [])
+    recent_chat = "\n".join(chat_history[-4:]) if chat_history else "None."
+
+    is_playlist = "playlist" in full_user_input.lower() or "playlist" in keywords.lower()
+    
+    if is_playlist:
+        task_instruction = "The user explicitly wants a PLAYLIST. Provide exactly 5 iconic tracks formatted as a list."
+        output_format = f"♫ [Catchy Playlist Name]\n{genre_label}: [Value]\n─────────────────\n{vibe_label}: [1-2 sentence pitch in {target_lang}]\n\n♫ [Track 1 - Artist]\n♫ [Track 2 - Artist]\n♫ [Track 3 - Artist]\n♫ [Track 4 - Artist]\n♫ [Track 5 - Artist]"
+    else:
+        task_instruction = "Suggest ONE perfect song or album based on the user's intent."
+        output_format = f"♫ [Title - Artist]\n{genre_label}: [Value]\n─────────────────\n{vibe_label}: [1-2 sentence pitch in {target_lang}]"
 
     prompt = f"""
     [ROLE]
@@ -353,26 +366,21 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     [CONTEXT]
     User Request: "{keywords}"
+    Recent Conversation Context: 
+    {recent_chat}
     Recent Recommendations (Avoid these): {history_text}
 
     [TASK]
-    Suggest EITHER a single masterpiece OR a curated mini-playlist (3-5 songs) based on the user's intent.
-    - If the user explicitly asks for a "playlist", provide 5 iconic tracks.
-    - Otherwise, suggest one perfect song or album.
+    {task_instruction}
+    CRITICAL: Use the "Recent Conversation Context" to remember the activity or vibe (e.g., "running with friends") if the current "User Request" is just a brief correction like "no, I want a playlist".
 
     [STRICT INSTRUCTIONS]
     1. LANGUAGE OVERRIDE: Write natively in {target_lang}.
-    2. PLAYLIST LOGIC: If providing a playlist, format each track as "♫ Title - Artist".
-    3. SEMANTIC ACCURACY: For "white girl music", include high-energy pop anthems (Taylor Swift, Katy Perry, etc.).
-    4. NO HALLUCINATIONS: REAL artists and songs only.
-    5. FORMATTING: Plain text only. No Markdown (no asterisks). Exactly 2 or 3 emojis.
+    2. NO HALLUCINATIONS: REAL artists and songs only.
+    3. FORMATTING: Plain text only. No Markdown (no asterisks). Exactly 2 or 3 emojis.
 
     [OUTPUT STRUCTURE]
-    [♫ Title - Artist] or [♫ Playlist Name]
-    {genre_label}: [Value]
-    ─────────────────
-    {vibe_label}: [1-2 sentence pitch in {target_lang}]
-    [If Playlist: List the 5 tracks here]
+    {output_format}
     """
     
     suggestion = await ask_llm(prompt) 
@@ -402,6 +410,8 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return None
     
     lang = context.user_data.get('lang', 'fr')
+    full_user_input = update.message.text if update.message and update.message.text else ""
+    
     query = update.callback_query
     if query:
         await query.answer()
@@ -412,12 +422,12 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         keywords = " ".join(context.args)
         context.user_data['last_book'] = keywords
 
-    if keywords and not query:
-        kw_lower = keywords.lower()
-        if any(w in kw_lower for w in ["livre", "roman", "pour", "avec", "de", "histoire", "auteur", "lire", "philosophie"]):
+    if full_user_input and not query:
+        kw_lower = full_user_input.lower()
+        if any(w in kw_lower.split() for w in ["livre", "roman", "pour", "avec", "de", "histoire", "auteur", "lire", "philosophie", "non", "veux", "liste", "série"]):
             lang = 'fr'
             context.user_data['lang'] = 'fr'
-        elif any(w in kw_lower for w in ["book", "novel", "for", "with", "story", "author", "read", "philosophy"]):
+        elif any(w in kw_lower.split() for w in ["book", "novel", "for", "with", "story", "author", "read", "philosophy", "want", "no", "i", "list", "series"]):
             lang = 'en'
             context.user_data['lang'] = 'en'
         
@@ -427,26 +437,21 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "⚠️ <b>Utilisation :</b> /book [genre/ambiance/sujet]\n"
                 "<i>Exemples :</i>\n"
                 "• <code>/book de la science-fiction avec des thèmes philosophiques</code>\n"
-                "• <code>/book roman policier haletant</code>"
+                "• <code>/book top 3 romans policiers</code>"
             )
         else:
             usage_text = (
                 "⚠️ <b>Usage:</b> /book [genre/vibe/topic]\n"
                 "<i>Examples:</i>\n"
                 "• <code>/book sci-fi with philosophical themes</code>\n"
-                "• <code>/book a gripping thriller</code>"
+                "• <code>/book top 3 gripping thrillers</code>"
             )
         await update.message.reply_text(usage_text, parse_mode=ParseMode.HTML)
         return None
 
     safe_keywords = html.escape(keywords)
-    
-    if lang == 'fr':
-        status_text = f"📚 <i>Recherche de '{safe_keywords}'...</i>"
-        btn_text = "🔄 Autre livre"
-    else:
-        status_text = f"📚 <i>Searching for '{safe_keywords}'...</i>"
-        btn_text = "🔄 Turn the page"
+    status_text = f"📚 <i>Recherche de '{safe_keywords}'...</i>" if lang == 'fr' else f"📚 <i>Searching for '{safe_keywords}'...</i>"
+    btn_text = "🔄 Autre livre" if lang == 'fr' else "🔄 Turn the page"
     
     if query:
         status_msg = await query.edit_message_text(status_text, parse_mode=ParseMode.HTML)
@@ -456,15 +461,13 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     current_time = time.time()
     one_week_seconds = 7 * 24 * 60 * 60
     
-    if 'history_book' not in context.user_data:
-        context.user_data['history_book'] = []
+    if 'history_book' not in context.user_data: context.user_data['history_book'] = []
         
     valid_history = [
         item for item in context.user_data['history_book'] 
         if (current_time - item['timestamp']) < one_week_seconds
     ]
     context.user_data['history_book'] = valid_history
-    
     history_titles = [item['title'] for item in valid_history]
     history_text = "\n".join(f"- {t}" for t in history_titles) if history_titles else "None."
 
@@ -472,32 +475,39 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     genre_label = "Genre"
     pitch_label = "Synopsis" if lang == 'fr' else "Pitch"
 
+    chat_history = context.user_data.get('chat_history', [])
+    recent_chat = "\n".join(chat_history[-4:]) if chat_history else "None."
+    is_list = any(w in full_user_input.lower() or w in keywords.lower() for w in ["list", "liste", "series", "série", "top", "trilogy", "trilogie"])
+    
+    if is_list:
+        task_instruction = "The user explicitly wants a LIST or SERIES. Provide 3-5 iconic books formatted as a list."
+        output_format = f"📚 [Catchy Theme or Series Name]\n{genre_label}: [Value]\n─────────────────\n{pitch_label}: [1-2 sentence pitch in {target_lang}]\n\n📖 [Book 1 Title] by [Author]\n📖 [Book 2 Title] by [Author]\n📖 [Book 3 Title] by [Author]"
+    else:
+        task_instruction = "Suggest ONE perfect, highly-acclaimed book (fiction or non-fiction) based on the user's intent."
+        output_format = f"📖 [Title] by [Author] (Year)\n{genre_label}: [Value]\n─────────────────\n{pitch_label}: [1-2 sentence pitch in {target_lang}]"
+
     prompt = f"""
     [ROLE]
     You are an elite Literary Curator and Librarian.
 
     [CONTEXT]
     User Request: "{keywords}"
-
-    [DO NOT RECOMMEND - RECENT SUGGESTIONS]
-    You MUST NOT suggest any of the following books. They have already been recommended recently:
-    {history_text}
+    Recent Conversation Context:
+    {recent_chat}
+    Recent Recommendations (Avoid these): {history_text}
 
     [TASK]
-    Suggest ONE perfect, highly-acclaimed book (fiction or non-fiction) based on the TRUE MEANING of the request.
+    {task_instruction}
+    CRITICAL: Use the "Recent Conversation Context" to remember the genre or vibe if the current "User Request" is just a brief correction like "no, I want a series".
 
     [STRICT INSTRUCTIONS]
-    1. LANGUAGE OVERRIDE: You MUST write the ENTIRE recommendation natively in {target_lang}. Do not drift into English if {target_lang} is FRENCH.
-    2. SEMANTIC CURATION: Interpret the vibe and meaning of the request. If the user asks for a masterpiece, recommend something timeless. DO NOT just search for a book with the user's exact words in the title.
-    3. NO HALLUCINATIONS: You must recommend a REAL, existing, published book by a REAL author. Do not invent titles or authors.
-    4. CASING: Use normal **Sentence Case** for the {pitch_label}. Do NOT use Title Case for every word.
-    5. FORMATTING: Plain text only. No Markdown (no asterisks). Do not use brackets [] for the labels.
+    1. LANGUAGE OVERRIDE: You MUST write the ENTIRE recommendation natively in {target_lang}.
+    2. NO HALLUCINATIONS: You must recommend REAL, existing, published books by REAL authors.
+    3. CASING: Use normal **Sentence Case** for the {pitch_label}. Do NOT use Title Case for every word.
+    4. FORMATTING: Plain text only. No Markdown (no asterisks).
 
     [OUTPUT STRUCTURE]
-    📖 Title by Author (Year)
-    {genre_label}: [Value]
-    ─────────────────
-    {pitch_label}: [1-2 sentence pitch in {target_lang}]
+    {output_format}
     """
     
     suggestion = await ask_llm(prompt) 
