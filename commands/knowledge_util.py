@@ -112,7 +112,25 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             lang = 'en'
             context.user_data['lang'] = 'en'
     
-    city_query = " ".join(context.args) or "Lausanne"
+    raw_args = " ".join(context.args).lower()
+    target_day = 0
+    time_context = "Current"
+    
+    if any(w in raw_args for w in ["après-demain", "apres-demain", "day after tomorrow"]):
+        target_day = 2
+        time_context = "Day after tomorrow"
+        for w in ["après-demain", "apres-demain", "day after tomorrow"]: raw_args = raw_args.replace(w, "")
+    elif any(w in raw_args for w in ["demain", "tomorrow"]):
+        target_day = 1
+        time_context = "Tomorrow"
+        for w in ["demain", "tomorrow"]: raw_args = raw_args.replace(w, "")
+    elif any(w in raw_args for w in ["aujourd'hui", "today"]):
+        target_day = 0
+        time_context = "Today"
+        for w in ["aujourd'hui", "today"]: raw_args = raw_args.replace(w, "")
+
+    clean_words = [w for w in raw_args.split() if w not in ["à", "a", "in", "for", "pour", "le", "la", "the", "on", "de"]]
+    city_query = " ".join(clean_words) or "Lausanne"
     display_name = city_query.title()
     safe_display = html.escape(display_name)
     
@@ -137,9 +155,17 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
             return None
             
         data = res.json()
-        current = data['current_condition'][0]
-        temp = current['temp_C']
-        condition = current['weatherDesc'][0]['value']
+        
+        if target_day == 0:
+            current = data['current_condition'][0]
+            temp_str = f"{current['temp_C']}°C"
+            condition = current['weatherDesc'][0]['value']
+        else:
+            forecast_data = data['weather'][target_day]
+            temp_max = forecast_data['maxtempC']
+            temp_min = forecast_data['mintempC']
+            temp_str = f"High: {temp_max}°C / Low: {temp_min}°C"
+            condition = forecast_data['hourly'][4]['weatherDesc'][0]['value']
         
         target_lang = "FRENCH" if lang == 'fr' else "ENGLISH"
         
@@ -149,19 +175,20 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         [CONTEXT]
         Location: {display_name}
-        Current Temperature: {temp}°C
+        Target Time: {time_context}
+        Temperature/Forecast: {temp_str}
         Sky Conditions: {condition}
 
         [TASK]
-        Write a short, high-personality weather report. Tell them how it feels and give a specific outfit/activity recommendation.
+        Write a short, high-personality weather report based on the "Target Time" and "Temperature/Forecast". Tell them how it will feel and give a specific outfit/activity recommendation appropriate for that day.
 
         [STRICT INSTRUCTIONS]
         1. LANGUAGE OVERRIDE: You MUST write the ENTIRE response natively in {target_lang}. Translate the Sky Conditions into {target_lang}. Do not drift into English.
         2. STRUCTURE: Exactly 2 sentences. No intros.
-        3. CASING: Use normal **Sentence Case** only (capitalize the first word of the sentence and proper nouns like city names). 
-           STRICTLY FORBIDDEN: Do not use Title Case for every word.
-        4. FORMATTING: Plain text ONLY. No Markdown (no asterisks). 
-        5. EMOJIS: Include exactly 2 emojis at the very end.
+        3. TEMPORAL ACCURACY: If the Target Time is tomorrow, use future tense (e.g., "Il fera...").
+        4. CASING: Use normal **Sentence Case** only (capitalize the first word of the sentence and proper nouns like city names). Do not use Title Case for every word.
+        5. FORMATTING: Plain text ONLY. No Markdown (no asterisks). 
+        6. EMOJIS: Include exactly 2 emojis at the very end.
 
         [OUTPUT STRUCTURE]
         [Sentence 1]. [Sentence 2] [Emoji][Emoji]
@@ -170,10 +197,14 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         forecast = await ask_llm(prompt, max_tokens=200)
         clean_forecast = forecast.replace("*", "").strip()
         
-        final_text = f"🌍 <b>{header_text}</b>\n──────────────────────\n{clean_forecast}" 
+        time_indicator = f" ({time_context})" if target_day > 0 else ""
+        if lang == 'fr' and target_day == 1: time_indicator = " (Demain)"
+        if lang == 'fr' and target_day == 2: time_indicator = " (Après-demain)"
+        
+        final_text = f"🌍 <b>{header_text}{time_indicator}</b>\n──────────────────────\n{clean_forecast}" 
         await status_msg.edit_text(final_text, parse_mode=ParseMode.HTML)
         
-        return f"Weather in {display_name}: {clean_forecast}"
+        return f"Weather in {display_name} ({time_context}): {clean_forecast}"
         
     except Exception as e:
         logger.error(f"❌ Weather Command Error: {e}")
@@ -268,3 +299,64 @@ async def remind_callback(context: ContextTypes.DEFAULT_TYPE):
         text=f"🔔 <b>{label} :</b> {html.escape(message)}", 
         parse_mode=ParseMode.HTML
     )
+
+
+async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not is_authorized(update): return None
+    
+    user_input = update.message.text if update.message and update.message.text else "What time is it?"
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /time with: {user_input}")
+    
+    lang = context.user_data.get('lang', 'fr')
+    
+    if user_input:
+        input_lower = user_input.lower()
+        if any(w in input_lower.split() for w in ["heure", "date", "maintenant", "temps"]):
+            lang = 'fr'
+            context.user_data['lang'] = 'fr'
+        elif any(w in input_lower.split() for w in ["time", "clock", "date", "today"]):
+            lang = 'en'
+            context.user_data['lang'] = 'en'
+            
+    status_text = "🕒 <i>Mattou regarde sa montre...</i>" if lang == 'fr' else "🕒 <i>Mattou checks its clock...</i>"
+    status_msg = await update.message.reply_text(status_text, parse_mode=ParseMode.HTML)
+    
+    import datetime
+    current_time_str = datetime.datetime.now().strftime("%A, %B %d, %Y - %H:%M")
+    
+    target_lang = "FRENCH" if lang == 'fr' else "ENGLISH"
+    
+    prompt = f"""
+    [ROLE]
+    You are MattouBot, a witty and helpful personal assistant.
+
+    [CONTEXT]
+    User Request: "{user_input}"
+    Real Current Time: {current_time_str}
+
+    [TASK]
+    Tell the user the exact time and date in a friendly, conversational way based on the "Real Current Time" provided.
+
+    [STRICT INSTRUCTIONS]
+    1. LANGUAGE OVERRIDE: You MUST write the ENTIRE response natively in {target_lang}. Translate the day, month, and time formatting (e.g., 14h30 instead of 2:30 PM if French). Do not drift into English if {target_lang} is FRENCH.
+    2. STRUCTURE: 1 or 2 short sentences. No preamble.
+    3. CASING: Use normal **Sentence Case**.
+    4. FORMATTING: Plain text ONLY. No Markdown (no asterisks). 
+    5. EMOJIS: Include exactly 1 or 2 relevant emojis.
+
+    [OUTPUT STRUCTURE]
+    [Your friendly response stating the time] [Emoji]
+    """
+    
+    try:
+        time_output = await ask_llm(prompt)
+        clean_time = time_output.replace("*", "").strip()
+        
+        await status_msg.edit_text(clean_time)
+        return clean_time
+        
+    except Exception as e:
+        logger.error(f"❌ Time Command Error: {e}")
+        fallback_time = f"🕒 Il est {current_time_str}." if lang == 'fr' else f"🕒 It is {current_time_str}."
+        await status_msg.edit_text(fallback_time)
+        return fallback_time
