@@ -1,6 +1,5 @@
 import os
 import logging
-import certifi
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
@@ -56,7 +55,7 @@ WMO_WEATHER_CODES = {
 grocery_collection = None
 
 if MONGO_URI:
-    from database import db 
+    from modules.database import db
     grocery_collection = db.groceries
 else:
     logger.warning("⚠️ MONGO_URI is missing! Groceries won't be saved.")
