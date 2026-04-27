@@ -9,19 +9,19 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
 from modules.ai_core import ask_llm
-from modules.config import grocery_collection
 from modules.utils import is_authorized 
+from modules.database import get_db
 
 logger = logging.getLogger(__name__)
 
 # ==========================================
 # SHARED LIFE COMMANDS
 # ==========================================
-def build_grocery_ui(lang: str = 'en'):
+async def build_grocery_ui(lang: str = 'en'):
     """Helper function to fetch the DB and build the interactive bilingual keyboard."""
     try:
-        items_cursor = grocery_collection.find()
-        docs = list(items_cursor)
+        db = get_db()
+        docs = await db.groceries.find().to_list(length=200)
         
         if not docs:
             empty_msg = "🛒 <b>La liste de courses est vide !</b>" if lang == 'fr' else "🛒 <b>The grocery list is currently empty!</b>"
@@ -57,7 +57,7 @@ async def grocery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     raw_item_str = " ".join(context.args)
     
     if not raw_item_str:
-        text, reply_markup = build_grocery_ui(lang)
+        text, reply_markup = await build_grocery_ui(lang)
         await update.message.reply_text(text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)
         return "Displayed the grocery list."
 
@@ -68,8 +68,10 @@ async def grocery_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if not items_to_add:
             return None
 
-        grocery_collection.insert_many([{"item": item} for item in items_to_add])
-        text, reply_markup = build_grocery_ui(lang)
+        db = get_db()
+        await db.groceries.insert_many([{"item": item} for item in items_to_add])
+        
+        text, reply_markup = await build_grocery_ui(lang)
         
         if len(items_to_add) == 1:
             safe_item = html.escape(items_to_add[0])
@@ -106,16 +108,18 @@ async def grocery_callback_handler(update: Update, context: ContextTypes.DEFAULT
     lang = context.user_data.get('lang', 'fr')
     
     try:
+        db = get_db()
+        
         if data.startswith("g_rm_"):
             item_id = data.replace("g_rm_", "")
-            item = grocery_collection.find_one({"_id": ObjectId(item_id)})
+            item = await db.groceries.find_one({"_id": ObjectId(item_id)})
             if item:
                 item_name = item['item']
-                grocery_collection.delete_one({"_id": ObjectId(item_id)})
+                await db.groceries.delete_one({"_id": ObjectId(item_id)})
                 memory_msg = f"Removed {item_name} from the list via button tap."
             
         elif data == "g_empty":
-            grocery_collection.delete_many({})
+            await db.groceries.delete_many({})
             memory_msg = "Cleared the entire grocery list via button tap."
 
         if memory_msg:
@@ -124,7 +128,7 @@ async def grocery_callback_handler(update: Update, context: ContextTypes.DEFAULT
             if len(context.user_data['chat_history']) > 6:
                 context.user_data['chat_history'] = context.user_data['chat_history'][-6:]
                 
-        text, reply_markup = build_grocery_ui(lang)
+        text, reply_markup = await build_grocery_ui(lang)
         await query.edit_message_text(text=text, reply_markup=reply_markup, parse_mode=ParseMode.HTML)  
       
     except Exception as e:
@@ -139,13 +143,15 @@ async def grocery_remove_command(update: Update, context: ContextTypes.DEFAULT_T
     if not item_to_remove: return None
     
     try:
-        docs = list(grocery_collection.find())
+        db = get_db()
+        docs = await db.groceries.find().to_list(length=200)
         current_items = [doc["item"] for doc in docs]
+
         matches = [i for i in current_items if item_to_remove.lower() in i.lower()]
         best_match = matches[0] if matches else (difflib.get_close_matches(item_to_remove, current_items, n=1, cutoff=0.3) or [None])[0]
         
         if best_match:
-            grocery_collection.delete_one({"item": best_match})
+            await db.groceries.delete_one({"item": best_match})
             msg = f"✅ {best_match} retiré de la liste !" if lang == 'fr' else f"✅ Removed {best_match} from the list."
             await update.message.reply_text(msg, parse_mode=ParseMode.HTML)
             return f"Removed {best_match} from the grocery list."
@@ -161,7 +167,8 @@ async def grocery_empty_command(update: Update, context: ContextTypes.DEFAULT_TY
     if not is_authorized(update): return None
     
     lang = context.user_data.get('lang', 'fr')
-    grocery_collection.delete_many({})
+    db = get_db()
+    await db.groceries.delete_many({})
     
     msg = "🧹 Liste de courses vidée !" if lang == 'fr' else "🧹 Grocery list cleared!"
     await update.message.reply_text(f"<b>{msg}</b>", parse_mode=ParseMode.HTML)

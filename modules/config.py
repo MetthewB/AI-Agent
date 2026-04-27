@@ -48,14 +48,3 @@ WMO_WEATHER_CODES = {
     80: "Light showers", 81: "Moderate showers", 82: "Heavy showers",
     95: "Thunderstorm", 96: "Thunderstorm with hail", 99: "Heavy thunderstorm"
 }
-
-# ==========================================
-# DATABASE SETUP (MONGODB)
-# ==========================================
-grocery_collection = None
-
-if MONGO_URI:
-    from modules.database import db
-    grocery_collection = db.groceries
-else:
-    logger.warning("⚠️ MONGO_URI is missing! Groceries won't be saved.")
