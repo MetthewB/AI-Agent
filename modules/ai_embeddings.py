@@ -5,11 +5,14 @@ from modules.config import HF_TOKEN
 
 logger = logging.getLogger(__name__)
 
-EMBEDDING_MODEL_URL = "https://router.huggingface.co/hf-inference/models/sentence-transformers/all-MiniLM-L6-v2"
+EMBEDDING_MODEL_URL = "https://api-inference.huggingface.co/pipeline/feature-extraction/sentence-transformers/all-MiniLM-L6-v2"
 
 async def generate_embedding(text: str):
-    """Turns text into a 384-dimension vector using the new HF Router."""
-    headers = {"Authorization": f"Bearer {HF_TOKEN}", "Content-Type": "application/json"}
+    """Turns text into a 384-dimension vector."""
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}", 
+        "Content-Type": "application/json"
+    }
     payload = {"inputs": text}
     
     try:
@@ -23,8 +26,10 @@ async def generate_embedding(text: str):
         
         if response.status_code == 200:
             result = response.json()
-            if isinstance(result, list) and len(result) > 0:
-                return result[0] if isinstance(result[0], list) else result
+            if isinstance(result, list):
+                if len(result) > 0 and isinstance(result[0], list):
+                    return result[0]
+                return result
             return result
         else:
             logger.error(f"❌ Embedding Error: {response.status_code} - {response.text}")
