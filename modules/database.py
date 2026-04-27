@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -6,28 +7,36 @@ from motor.motor_asyncio import AsyncIOMotorClient
 logger = logging.getLogger(__name__)
 MONGO_URI = os.environ.get("MONGO_URI")
 
-_client = None
+_loop_clients = {}
 
 
 def get_db():
-    """Lazy initialization: Only creates the client if it doesn't exist yet,
-    guaranteeing it attaches to the active Telegram event loop."""
-    global _client
-    if _client is None:
-        _client = AsyncIOMotorClient(MONGO_URI)
-    return _client.mattoubot
+    """
+    Retrieves the MongoDB database instance.
+    Guarantees the client is attached to the CURRENTLY RUNNING event loop.
+    """
+    global _loop_clients
+    
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        return AsyncIOMotorClient(MONGO_URI).mattoubot
+
+    if loop not in _loop_clients:
+        logger.info(f"🌐 Creating new MongoDB client for event loop: {id(loop)}")
+        _loop_clients[loop] = AsyncIOMotorClient(MONGO_URI)
+        
+    return _loop_clients[loop].mattoubot
 
 
 async def init_db():
-    """Pings the database and creates unique indexes to prevent duplicate data."""
+    """Pings the database to verify connection."""
     try:
         db = get_db()
-        await db.client.admin.command('ping')
-        
+        await db.command('ping')
         await db.activities.create_index("strava_id", unique=True)
         await db.users.create_index("user_id", unique=True)
-        
-        logger.info("✅ MongoDB Connected and Indexes Initialized Successfully.")
+        logger.info("✅ MongoDB Connected and Indexes Verified.")
     except Exception as e:
         logger.error(f"❌ Failed to connect to MongoDB: {e}")
 

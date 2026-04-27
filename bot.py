@@ -15,6 +15,14 @@ from commands.shared_life import grocery_command, grocery_remove_command, grocer
 from commands.health_fitness import train_command, stats_command
 from commands.fun_extras import movie_command, music_command, book_command, cat_command, dateidea_command
 
+
+# ==========================================
+# POST-INIT HOOK
+# ==========================================
+async def post_init(application: Application):
+    from modules.database import init_db
+    await init_db()
+
 # ==========================================
 # HEALTH CHECK SERVER
 # ==========================================
@@ -37,7 +45,7 @@ def run_health_check():
 def run_bot():
     """Builds and runs the bot in an isolated scope to prevent Event Loop crashes."""
     logger.info("🤖 Starting Modular MattouBot...")
-    app = Application.builder().token(TOKEN).build()
+    app = Application.builder().token(TOKEN).post_init(post_init).build()
     
     # --- General & Help ---
     app.add_handler(CommandHandler("start", start_command))
@@ -50,7 +58,7 @@ def run_bot():
     app.add_handler(CommandHandler("research", research_command))
     app.add_handler(CommandHandler("weather", weather_command))
     app.add_handler(CommandHandler("remind", remind_command))
-    app.add_handler(CommandHandler("remind", time_command))
+    app.add_handler(CommandHandler("time", time_command))
     
     # --- Shared Life ---
     app.add_handler(CommandHandler("grocery", grocery_command))
@@ -94,7 +102,6 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
 
     threading.Thread(target=run_health_check, daemon=True).start()
-    asyncio.run(init_db())
     
     if not TOKEN:
         logger.error("❌ TELEGRAM_TOKEN missing in environment variables!")
