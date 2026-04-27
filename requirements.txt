@@ -12,6 +12,5 @@ apscheduler
 pymongo>=3.12
 certifi
 python-dotenv
-sqlalchemy
-psycopg2-binary
+motor
 httpx

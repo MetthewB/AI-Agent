@@ -1,4 +1,5 @@
 import os
+import asyncio
 import logging
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -93,7 +94,7 @@ if __name__ == "__main__":
     logger = logging.getLogger(__name__)
 
     threading.Thread(target=run_health_check, daemon=True).start()
-    init_db()
+    asyncio.run(init_db())
     
     if not TOKEN:
         logger.error("❌ TELEGRAM_TOKEN missing in environment variables!")

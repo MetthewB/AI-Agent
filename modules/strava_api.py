@@ -2,9 +2,8 @@ import re
 import asyncio
 import logging
 import requests
-import datetime
 
-from modules.database import SessionLocal, Activity
+from modules.database import save_activity
 from modules.config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_REFRESH_TOKEN
 
 logger = logging.getLogger(__name__)
@@ -33,18 +32,17 @@ async def get_strava_access_token() -> str:
         return None
 
 # ==========================================
-# DATABASE SYNC (PostgreSQL)
+# DATABASE SYNC (MongoDB)
 # ==========================================
 async def sync_activities_to_db(activities_data):
     """
     Takes a list of activity dictionaries from Strava API 
-    and persists new ones into PostgreSQL.
+    and persists them into MongoDB using Upsert.
     """
     if not isinstance(activities_data, list):
         logger.error(f"❌ Sync Error: Expected a list of activities, got {type(activities_data)}")
         return 0
 
-    db = SessionLocal()
     new_count = 0
     
     try:
@@ -53,49 +51,32 @@ async def sync_activities_to_db(activities_data):
             if not strava_id:
                 continue
                 
-            exists = db.query(Activity).filter(Activity.strava_id == strava_id).first()
+            sport = act.get('sport_type') or act.get('type', 'Unknown')
+            distance = float(act.get('distance', 0)) / 1000
+            duration = int(act.get('moving_time', 0)) // 60
+            avg_hr = act.get('average_heartrate')
             
-            if not exists:
-                try:
-                    raw_date = act.get('start_date_local', '')
-                    date_str = str(raw_date)[:10] if raw_date else ""
-                    
-                    try:
-                        date_obj = datetime.datetime.strptime(date_str, "%Y-%m-%d")
-                    except Exception:
-                        date_obj = datetime.datetime.utcnow()
+            coros_load = None
+            desc = act.get('description', '') or ''
+            load_match = re.search(r'(\d+)\s*charge', desc.lower())
+            if load_match:
+                coros_load = int(load_match.group(1))
 
-                    sport = act.get('sport_type') or act.get('type', 'Unknown')
-                    distance = float(act.get('distance', 0)) / 1000
-                    duration = int(act.get('moving_time', 0)) // 60
-                    avg_hr = act.get('average_heartrate')
-
-                    new_act = Activity(
-                        strava_id=strava_id,
-                        date=date_obj,
-                        sport=sport,
-                        distance=distance,
-                        duration=duration,
-                        avg_hr=avg_hr,
-                        coros_load=None
-                    )
-                    
-                    db.add(new_act)
-                    new_count += 1
-                    
-                except Exception as inner_e:
-                    logger.error(f"❌ Failed to process activity {strava_id}. Reason: {inner_e}")
-        
-        db.commit()
+            await save_activity(
+                strava_id=strava_id,
+                sport=sport,
+                distance_km=distance,
+                duration_min=duration,
+                coros_load=coros_load,
+                avg_hr=avg_hr
+            )
+            new_count += 1
         
         if new_count > 0:
-            logger.info(f"📊 PostgreSQL Sync: Saved {new_count} new activities.")
+            logger.info(f"📊 MongoDB Sync: Processed {new_count} activities.")
             
     except Exception as e:
-        logger.error(f"❌ PostgreSQL Sync Error: {e}")
-        db.rollback()
-    finally:
-        db.close()
+        logger.error(f"❌ MongoDB Sync Error: {e}")
         
     return new_count
 

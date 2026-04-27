@@ -1,7 +1,6 @@
 import os
 import logging
 import certifi
-from pymongo import MongoClient
 from dotenv import load_dotenv
 
 logger = logging.getLogger(__name__)
@@ -54,17 +53,10 @@ WMO_WEATHER_CODES = {
 # ==========================================
 # DATABASE SETUP (MONGODB)
 # ==========================================
-grocery_collection = None 
+grocery_collection = None
 
 if MONGO_URI:
-    try:
-        mongo_client = MongoClient(MONGO_URI, tlsCAFile=certifi.where())
-        db = mongo_client["mattoubot_db"]
-        grocery_collection = db["groceries"]
-        
-        mongo_client.admin.command('ping')
-        logger.info("✅ MongoDB Connection Successful!")
-    except Exception as e:
-        logger.error(f"❌ MongoDB Initial Connection Failed: {e}")
+    from database import db 
+    grocery_collection = db.groceries
 else:
     logger.warning("⚠️ MONGO_URI is missing! Groceries won't be saved.")
