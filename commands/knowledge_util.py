@@ -419,18 +419,30 @@ async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return fallback_time
     
 
-async def memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Saves a piece of information to the AI's long-term memory."""
+async def memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE, nlu_data: str = None):
+    """
+    Saves a piece of information to the AI's long-term memory.
+    Works via /memo command OR via NLU intent routing.
+    """
     user_id = update.effective_user.id
-    text = " ".join(context.args)
     
+    if nlu_data:
+        text = nlu_data
+    elif context.args:
+        text = " ".join(context.args)
+    else:
+        text = None
+
     if not text:
         await update.message.reply_text("❓ Que voulez-vous que je retienne ? (ex: /memo J'aime le café)")
-        return
+        return "User triggered memo but provided no text."
         
+    from modules.database import add_to_vault
     success = await add_to_vault(user_id, text)
     
     if success:
         await update.message.reply_text("🧠 C'est noté, je m'en souviendrai !")
+        return f"Successfully saved to vault: {text}"
     else:
         await update.message.reply_text("⚠️ Désolé, j'ai eu un problème pour enregistrer ça.")
+        return "Failed to save to vault."

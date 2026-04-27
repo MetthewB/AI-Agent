@@ -259,7 +259,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await time_command(update, context)
 
         elif action == "memo":
-            await memo_command(update, context)
+            await memo_command(update, context, nlu_data=data)
             
         elif action == "cat":
             await cat_command(update, context)
