@@ -5,12 +5,11 @@ import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, CallbackQueryHandler
 from modules.intent_router import voice_handler, message_handler
-from modules.database import init_db
 from modules.config import TOKEN
 
 from commands.general import start_command, error_handler
 from commands.finance_news import portfolio_command, news_command
-from commands.knowledge_util import research_command, weather_command, remind_command, time_command
+from commands.knowledge_util import research_command, weather_command, remind_command, time_command, memo_command
 from commands.shared_life import grocery_command, grocery_remove_command, grocery_empty_command, grocery_callback_handler, decide_command, recipe_command
 from commands.health_fitness import train_command, stats_command
 from commands.fun_extras import movie_command, music_command, book_command, cat_command, dateidea_command
@@ -59,6 +58,7 @@ def run_bot():
     app.add_handler(CommandHandler("weather", weather_command))
     app.add_handler(CommandHandler("remind", remind_command))
     app.add_handler(CommandHandler("time", time_command))
+    app.add_handler(CommandHandler("memo", memo_command))
     
     # --- Shared Life ---
     app.add_handler(CommandHandler("grocery", grocery_command))

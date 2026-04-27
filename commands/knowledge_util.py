@@ -12,6 +12,7 @@ from telegram.constants import ParseMode
 
 from modules.ai_core import ask_llm
 from modules.utils import parse_time_string, is_authorized
+from modules.database import add_to_vault
 
 logger = logging.getLogger(__name__)
 
@@ -416,3 +417,20 @@ async def time_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         fallback_time = f"🕒 Il est {current_time_str}." if lang == 'fr' else f"🕒 It is {current_time_str}."
         await status_msg.edit_text(fallback_time)
         return fallback_time
+    
+
+async def memo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Saves a piece of information to the AI's long-term memory."""
+    user_id = update.effective_user.id
+    text = " ".join(context.args)
+    
+    if not text:
+        await update.message.reply_text("❓ Que voulez-vous que je retienne ? (ex: /memo J'aime le café)")
+        return
+        
+    success = await add_to_vault(user_id, text)
+    
+    if success:
+        await update.message.reply_text("🧠 C'est noté, je m'en souviendrai !")
+    else:
+        await update.message.reply_text("⚠️ Désolé, j'ai eu un problème pour enregistrer ça.")

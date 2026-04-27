@@ -14,7 +14,7 @@ from modules.utils import is_authorized
 
 from commands.general import start_command
 from commands.finance_news import portfolio_command, news_command
-from commands.knowledge_util import research_command, weather_command, remind_command, time_command
+from commands.knowledge_util import research_command, weather_command, remind_command, time_command, memo_command
 from commands.shared_life import grocery_command, grocery_remove_command, recipe_command, decide_command
 from commands.health_fitness import train_command, stats_command
 from commands.fun_extras import movie_command, music_command, book_command, cat_command, dateidea_command
@@ -126,6 +126,8 @@ async def parse_intent(user_text: str, history: list = None) -> list:
       * Ex: "qui a gagné le match hier" -> data: "qui a gagné le match hier" | "SpaceX launch status" -> data: "SpaceX launch status"
     - time: User asks what time it is, what day it is, or wants the current date/clock.
       * Ex: "quelle heure est il" -> data: "" | "what is the date today" -> data: ""
+    - memo: User asks to make a reminder of what he says later.
+      * Ex: "rappelle-moi que j'ai mangé du boeuf ce midi" -> data: "j'ai mangé du boeuf ce midi" | "note that I went shopping at 5pm" -> data: "I went shopping at 5pm"
 
     --- HEALTH & LIFESTYLE ---
     - train: User wants a workout or training plan. 
@@ -255,6 +257,9 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
         elif action == "time":
             await time_command(update, context)
+
+        elif action == "memo":
+            await memo_command(update, context)
             
         elif action == "cat":
             await cat_command(update, context)
@@ -406,6 +411,7 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         - research: args = ["topic"]
         - remind: args = ["time", "message"]
         - time: args = []
+        - memo: args = ["memo details"]
         - chat: args = ["the full user message"] (USE THIS for general conversation, questions, jokes, or advice)
             
         Return ONLY a valid JSON list of dictionaries.
@@ -455,7 +461,8 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             "dateidea": dateidea_command,
             "research": research_command,
             "remind": remind_command,
-            "time": time_command
+            "time": time_command,
+            "memo": memo_command
         }
 
         for cmd in commands_to_run:

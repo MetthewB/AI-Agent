@@ -1,7 +1,6 @@
 langgraph
 langchain-huggingface
 ddgs
-requests
 yfinance
 icalevents
 python-telegram-bot
@@ -13,4 +12,6 @@ pymongo>=3.12
 certifi
 python-dotenv
 motor
+requests
+numpy
 httpx

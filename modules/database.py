@@ -41,6 +41,30 @@ async def init_db():
         logger.error(f"❌ Failed to connect to MongoDB: {e}")
 
 
+async def add_to_vault(user_id: int, content: str, metadata: dict = None):
+    """Generates embedding and saves a new memory to the vault."""
+    from modules.ai_embeddings import generate_embedding
+    import datetime
+    
+    vector = await generate_embedding(content)
+    if not vector:
+        logger.error("❌ Could not save to vault: Embedding generation failed.")
+        return False
+        
+    db = get_db()
+    document = {
+        "user_id": user_id,
+        "content": content,
+        "embedding": vector,
+        "timestamp": datetime.datetime.utcnow(),
+        "metadata": metadata or {}
+    }
+    
+    await db.vault.insert_one(document)
+    logger.info(f"🧠 Memory saved to vault for user {user_id}")
+    return True
+
+
 async def save_activity(strava_id: int, sport: str, distance_km: float, duration_min: int, coros_load: int = None, avg_hr: float = None):
     """Upserts a Strava activity into the database."""
     db = get_db()
