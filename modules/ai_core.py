@@ -15,11 +15,11 @@ async def ask_llm(prompt: str, max_tokens: int = 400) -> str:
     }
     
     payload = {
-        "model": "qwen/qwen-2.5-72b-instruct",
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": max_tokens,
-        "temperature": 0.7
-    }
+    "model": "google/gemma-2-9b-it:free", 
+    "messages": [{"role": "user", "content": prompt}],
+    "temperature": 0.7,
+    "max_tokens": 500
+}
 
     max_retries = 3
     base_delay = 5.0

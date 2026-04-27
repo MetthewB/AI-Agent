@@ -169,9 +169,18 @@ async def parse_intent(user_text: str, history: list = None) -> list:
     """
     
     response = await ask_llm(prompt)
+    
+    if not response:
+        return [{"action": "chat", "data": user_text}]
+        
     try:
-        clean_json = re.search(r'\[.*\]', response, re.DOTALL).group()
-        return json.loads(clean_json)
+        match = re.search(r'\[.*\]', response, re.DOTALL)
+        if match:
+            return json.loads(match.group())
+        else:
+            logger.warning(f"No JSON array found in LLM response. Raw: {response}")
+            return [{"action": "chat", "data": user_text}]
+            
     except Exception as e:
         logger.error(f"Intent Parse Error: {e} - Raw: {response}")
         return [{"action": "chat", "data": user_text}]
@@ -425,9 +434,16 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         
         routing_response = await ask_llm(prompt, max_tokens=200)
         
+        if not routing_response:
+            await status_msg.edit_text("⚠️ <i>My brain generated an empty response.</i>", parse_mode=ParseMode.HTML)
+            return
+            
         try:
-            clean_json = re.search(r'\[.*\]', routing_response, re.DOTALL).group()
-            commands_to_run = json.loads(clean_json)
+            match = re.search(r'\[.*\]', routing_response, re.DOTALL)
+            if match:
+                commands_to_run = json.loads(match.group())
+            else:
+                raise ValueError("No JSON array found in voice routing response.")
         except Exception as e:
             logger.error(f"❌ JSON Parse Error from Voice LLM: {routing_response} | Error: {e}")
             await status_msg.edit_text("⚠️ <i>I understood the words, but my brain failed to map the commands!</i>", parse_mode=ParseMode.HTML)
