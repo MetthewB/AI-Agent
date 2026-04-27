@@ -2,25 +2,30 @@ import os
 import logging
 import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
-from pymongo.errors import ConnectionFailure
 
 logger = logging.getLogger(__name__)
 MONGO_URI = os.environ.get("MONGO_URI")
 
-client = AsyncIOMotorClient(MONGO_URI)
-db = client.mattoubot 
+_client = None
 
-activities_collection = db.activities
-users_collection = db.users
-vault_collection = db.vault
+
+def get_db():
+    """Lazy initialization: Only creates the client if it doesn't exist yet,
+    guaranteeing it attaches to the active Telegram event loop."""
+    global _client
+    if _client is None:
+        _client = AsyncIOMotorClient(MONGO_URI)
+    return _client.mattoubot
+
 
 async def init_db():
     """Pings the database and creates unique indexes to prevent duplicate data."""
     try:
-        await client.admin.command('ping')
+        db = get_db()
+        await db.client.admin.command('ping')
         
-        await activities_collection.create_index("strava_id", unique=True)
-        await users_collection.create_index("user_id", unique=True)
+        await db.activities.create_index("strava_id", unique=True)
+        await db.users.create_index("user_id", unique=True)
         
         logger.info("✅ MongoDB Connected and Indexes Initialized Successfully.")
     except Exception as e:
@@ -29,6 +34,7 @@ async def init_db():
 
 async def save_activity(strava_id: int, sport: str, distance_km: float, duration_min: int, coros_load: int = None, avg_hr: float = None):
     """Upserts a Strava activity into the database."""
+    db = get_db()
     activity_doc = {
         "strava_id": strava_id,
         "date": datetime.datetime.utcnow(),
@@ -39,7 +45,7 @@ async def save_activity(strava_id: int, sport: str, distance_km: float, duration
         "avg_hr": avg_hr
     }
     
-    await activities_collection.update_one(
+    await db.activities.update_one(
         {"strava_id": strava_id},
         {"$set": activity_doc},
         upsert=True
@@ -48,7 +54,8 @@ async def save_activity(strava_id: int, sport: str, distance_km: float, duration
 
 async def get_user_language(user_id: int) -> str:
     """Fetches the user's saved language, defaults to English."""
-    user = await users_collection.find_one({"user_id": user_id})
+    db = get_db()
+    user = await db.users.find_one({"user_id": user_id})
     if user and "language" in user:
         return user["language"]
     return "en"
@@ -56,7 +63,8 @@ async def get_user_language(user_id: int) -> str:
 
 async def update_user_language(user_id: int, language: str):
     """Updates the user's preferred language and last active timestamp."""
-    await users_collection.update_one(
+    db = get_db()
+    await db.users.update_one(
         {"user_id": user_id},
         {"$set": {
             "language": language,
