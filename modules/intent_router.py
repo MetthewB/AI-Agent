@@ -11,6 +11,7 @@ from telegram.constants import ParseMode
 from modules.ai_core import ask_llm
 from modules.config import HF_TOKEN
 from modules.utils import is_authorized
+from modules.database import search_vault
 
 from commands.general import start_command
 from commands.finance_news import portfolio_command, news_command
@@ -306,6 +307,13 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 
             history_text = "\n".join(context.user_data['chat_history']) if context.user_data['chat_history'] else "None."
             
+            user_id = update.effective_user.id
+            memories = await search_vault(user_id, user_text)
+            
+            memory_context = ""
+            if memories:
+                memory_context = f"\n[RELEVANT MEMORIES FROM VAULT]\nThe user has previously told you these things. Use them to answer if relevant:\n{memories}\n"
+            
             persona_prompt = f"""
             [ROLE]
             You are MattouBot, a highly intelligent, witty, and helpful personal assistant created by Matthieu.
@@ -315,7 +323,7 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             1. Be conversational, friendly, and concise. 
             2. If asked for a joke, make it actually funny and clever.
             3. If asked a general knowledge question, provide a clear, factual, and helpful answer.
-            4. Keep formatting clean. Use emojis tastefully. No markdown headers.
+            4. Keep formatting clean. Use emojis tastefully. No markdown headers.{memory_context}
             
             [PREVIOUS CONVERSATION CONTEXT]
             {history_text}
@@ -499,6 +507,15 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 if 'chat_history' not in context.user_data:
                     context.user_data['chat_history'] = []
                 
+                history_text = "\n".join(context.user_data['chat_history']) if context.user_data['chat_history'] else "None."
+                
+                user_id = update.effective_user.id
+                memories = await search_vault(user_id, chat_text)
+                
+                memory_context = ""
+                if memories:
+                    memory_context = f"\n[RELEVANT MEMORIES FROM VAULT]\nThe user has previously told you these things. Use them to answer if relevant:\n{memories}\n"
+                
                 persona_prompt = f"""
                 [ROLE]
                 You are MattouBot, a highly intelligent, witty, and helpful personal assistant created by Matthieu.
@@ -508,7 +525,7 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 1. Be conversational, friendly, and concise. 
                 2. If asked for a joke, make it actually funny and clever.
                 3. If asked a general knowledge question, provide a clear, factual answer.
-                4. Keep formatting clean. Use emojis tastefully. No markdown headers.
+                4. Keep formatting clean. Use emojis tastefully. No markdown headers.{memory_context}
                 
                 [PREVIOUS CONVERSATION CONTEXT]
                 {history_text}

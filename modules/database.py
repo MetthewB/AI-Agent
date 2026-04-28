@@ -3,6 +3,8 @@ import asyncio
 import logging
 import datetime
 from motor.motor_asyncio import AsyncIOMotorClient
+    
+from modules.ai_embeddings import generate_embedding
 
 logger = logging.getLogger(__name__)
 MONGO_URI = os.environ.get("MONGO_URI")
@@ -63,6 +65,60 @@ async def add_to_vault(user_id: int, content: str, metadata: dict = None):
     await db.vault.insert_one(document)
     logger.info(f"🧠 Memory saved to vault for user {user_id}")
     return True
+
+
+async def search_vault(user_id: int, query_text: str, limit: int = 3) -> str:
+    """
+    Searches the vault for memories related to the user's query using Vector Search.
+    Returns a formatted string of memories to be injected into the LLM prompt.
+    """    
+    query_vector = await generate_embedding(query_text)
+    if not query_vector:
+        logger.error("❌ Vector search failed: Could not generate query embedding.")
+        return ""
+        
+    db = get_db()
+    
+    pipeline = [
+        {
+            "$vectorSearch": {
+                "index": "vector_index",
+                "path": "embedding",
+                "queryVector": query_vector,
+                "numCandidates": limit * 10,
+                "limit": limit,
+                "filter": {"user_id": {"$eq": user_id}} 
+            }
+        },
+        {
+            "$project": {
+                "_id": 0,
+                "content": 1,
+                "timestamp": 1,
+                "score": { "$meta": "vectorSearchScore" }
+            }
+        }
+    ]
+    
+    try:
+        cursor = db.vault.aggregate(pipeline)
+        results = await cursor.to_list(length=limit)
+        
+        if not results:
+            return ""
+            
+        context_pieces = []
+        for doc in results:
+            score = doc.get("score", 0)
+            if score > 0.5: 
+                date_str = doc.get("timestamp").strftime("%Y-%m-%d") if doc.get("timestamp") else "Unknown date"
+                context_pieces.append(f"- On {date_str}, user noted: {doc.get('content')}")
+            
+        return "\n".join(context_pieces)
+        
+    except Exception as e:
+        logger.error(f"❌ Atlas Vector Search Exception: {e}")
+        return ""
 
 
 async def save_activity(strava_id: int, sport: str, distance_km: float, duration_min: int, coros_load: int = None, avg_hr: float = None):
