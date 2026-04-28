@@ -12,9 +12,10 @@ async def ask_llm(prompt: str, max_tokens: int = 500) -> str:
     """
     
     MODELS_TO_TRY = [
-        "google/gemma-4-31b-it:free",             # 1. Your new discovery (The smartest)
-        "meta-llama/llama-3.1-8b-instruct:free",  # 2. Meta's highly reliable backup
-        "microsoft/phi-3-mini-128k-instruct:free" # 3. Microsoft's fast emergency backup
+        "google/gemma-4-31b-it:free",          # Let's keep trying the smart one first
+        "huggingfaceh4/zephyr-7b-beta:free",   # Highly stable backup
+        "mistralai/mistral-7b-instruct:free",  # Very reliable free endpoint
+        "openrouter/auto"                      # The ultimate fallback (OpenRouter picks a free one)
     ]
     
     headers = {
