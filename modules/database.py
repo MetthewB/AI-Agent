@@ -82,12 +82,11 @@ async def search_vault(user_id: int, query_text: str, limit: int = 3) -> str:
     pipeline = [
         {
             "$vectorSearch": {
-                "index": "vector_index",
+                "index": "vector_index", 
                 "path": "embedding",
                 "queryVector": query_vector,
                 "numCandidates": limit * 10,
-                "limit": limit,
-                "filter": {"user_id": {"$eq": user_id}} 
+                "limit": limit
             }
         },
         {
