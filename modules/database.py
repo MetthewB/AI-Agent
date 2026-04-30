@@ -86,7 +86,8 @@ async def search_vault(user_id: int, query_text: str, limit: int = 3) -> str:
                 "path": "embedding",
                 "queryVector": query_vector,
                 "numCandidates": limit * 10,
-                "limit": limit
+                "limit": limit,
+                "filter": {"user_id": {"$eq": user_id}} 
             }
         },
         {
