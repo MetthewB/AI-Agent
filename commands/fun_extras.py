@@ -244,7 +244,7 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task_instruction = "The user explicitly wants a LIST, FRANCHISE, or MARATHON. Provide 3-5 iconic movies or shows formatted as a list."
         output_format = f"🎬 [Catchy Theme or Franchise Name]\n{genre_label}: [Value]\n─────────────────\n{pitch_label}: [1-2 sentence pitch in {target_lang}]\n\n🍿 [Movie 1 Title] (Year)\n🍿 [Movie 2 Title] (Year)\n🍿 [Movie 3 Title] (Year)"
     else:
-        task_instruction = "If the user describes a specific movie (e.g., plot, actors, location), IDENTIFY AND RETURN THAT EXACT MOVIE. Otherwise, suggest ONE perfect movie/series based on their vibe intent."
+        task_instruction = "If the user describes a specific movie (e.g., plot, actors, location), IDENTIFY AND RETURN THAT EXACT MOVIE. Analyze the ENTIRE description to avoid keyword tunnel vision. Otherwise, suggest ONE perfect movie/series based on their vibe intent."
         output_format = f"🎬 [Title] (Year)\n{genre_label}: [Value]\n─────────────────\n{pitch_label}: [1-2 sentence synopsis in {target_lang}]"
     
     prompt = f"""
@@ -259,14 +259,14 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     [TASK]
     {task_instruction}
-    CRITICAL: Use the "Recent Conversation Context" to remember the genre or vibe if the current "User Request" is just a brief correction like "no, I want a top 3 list".
+    CRITICAL: Search your global knowledge base regardless of the language the user typed in. If a specific plot is described, cross-reference all known films to find a 100% accurate match.
 
     [STRICT INSTRUCTIONS]
     1. LANGUAGE OVERRIDE: You MUST write the ENTIRE recommendation natively in {target_lang}.
-    2. NO HALLUCINATIONS: You must recommend REAL, existing, released movies or TV series.
+    2. ZERO HALLUCINATIONS (CRITICAL): You must recommend REAL, existing, released movies or TV series. NEVER invent titles and NEVER attribute a fake plot to a real actor. If you are unsure of the exact movie, provide the closest REAL match and explain why in the synopsis.
     3. CASING: Use normal Sentence Case for the {pitch_label}. Do NOT use Title Case for every word in the description.
     4. FORMATTING: Plain text only. No Markdown (no asterisks).
-    5. NO FILLER: Output EXACTLY AND ONLY the requested structure. NO conversational intro/outro (e.g., do NOT say "Voici ma suggestion" or "I think you mean...").
+    5. NO FILLER: Output EXACTLY AND ONLY the requested structure. NO conversational intro/outro (e.g., do NOT say "D'accord, voici..." or "I think you mean...").
 
     [OUTPUT STRUCTURE]
     {output_format}
@@ -370,7 +370,7 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task_instruction = "The user explicitly wants a PLAYLIST. Provide exactly 5 iconic tracks formatted as a list."
         output_format = f"♫ [Catchy Playlist Name]\n{genre_label}: [Value]\n─────────────────\n{vibe_label}: [1-2 sentence pitch in {target_lang}]\n\n♫ [Track 1 - Artist]\n♫ [Track 2 - Artist]\n♫ [Track 3 - Artist]\n♫ [Track 4 - Artist]\n♫ [Track 5 - Artist]"
     else:
-        task_instruction = "If the user describes a specific song (e.g., lyrics, artist, melody), IDENTIFY AND RETURN THAT EXACT SONG. Otherwise, suggest ONE perfect song/album based on their vibe intent."
+        task_instruction = "If the user describes a specific song (e.g., lyrics, artist, melody), IDENTIFY AND RETURN THAT EXACT SONG. Analyze the ENTIRE description. Otherwise, suggest ONE perfect song/album based on their vibe intent."
         output_format = f"♫ [Title - Artist]\n{genre_label}: [Value]\n─────────────────\n{vibe_label}: [1-2 sentence pitch in {target_lang}]"
 
     prompt = f"""
@@ -385,13 +385,13 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     [TASK]
     {task_instruction}
-    CRITICAL: Use the "Recent Conversation Context" to remember the activity or vibe (e.g., "running with friends") if the current "User Request" is just a brief correction like "no, I want a playlist".
+    CRITICAL: Search your global knowledge base regardless of the language the user typed in. If they provide lyrics, cross-reference them with all known songs to find a 100% accurate match.
 
     [STRICT INSTRUCTIONS]
     1. LANGUAGE OVERRIDE: Write natively in {target_lang}.
-    2. NO HALLUCINATIONS: REAL artists and songs only.
-    3. FORMATTING: Plain text only. No Markdown (no asterisks).
-    4. NO FILLER: Output EXACTLY AND ONLY the requested structure. NO conversational intro/outro (e.g., do NOT say "Voici la chanson" or "The song is...").
+    2. ZERO HALLUCINATIONS (CRITICAL): You must identify REAL artists and REAL songs. NEVER invent track titles or mix up artists. If you are unsure of the exact song, find the closest REAL match and explain in the vibe pitch why it matches the description.
+    3. FORMATTING: Plain text only. No Markdown (no asterisks). Exactly 2 or 3 emojis.
+    4. NO FILLER: Output EXACTLY AND ONLY the requested structure. NO conversational intro/outro (e.g., do NOT say "The song you are looking for is...").
 
     [OUTPUT STRUCTURE]
     {output_format}
@@ -499,7 +499,7 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task_instruction = "The user explicitly wants a LIST or SERIES. Provide 3-5 iconic books formatted as a list."
         output_format = f"📚 [Catchy Theme or Series Name]\n{genre_label}: [Value]\n─────────────────\n{pitch_label}: [1-2 sentence pitch in {target_lang}]\n\n📖 [Book 1 Title] by [Author]\n📖 [Book 2 Title] by [Author]\n📖 [Book 3 Title] by [Author]"
     else:
-        task_instruction = "If the user describes a specific book (e.g., plot, author, concept), IDENTIFY AND RETURN THAT EXACT BOOK. Otherwise, suggest ONE perfect, highly-acclaimed book based on their vibe intent."
+        task_instruction = "If the user describes a specific book's plot or characters, IDENTIFY AND RETURN THAT EXACT BOOK. Analyze the ENTIRE plot description, not just one keyword. Otherwise, suggest ONE perfect, highly-acclaimed book based on their vibe intent."
         output_format = f"📖 [Title] by [Author] (Year)\n{genre_label}: [Value]\n─────────────────\n{pitch_label}: [1-2 sentence pitch in {target_lang}]"
 
     prompt = f"""
@@ -514,14 +514,14 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     [TASK]
     {task_instruction}
-    CRITICAL: Use the "Recent Conversation Context" to remember the genre or vibe if the current "User Request" is just a brief correction like "no, I want a series".
+    CRITICAL: Search your global knowledge base regardless of the language the user typed in (e.g., if they ask in French about a Brazilian book, find the original book and translate the output to French).
 
     [STRICT INSTRUCTIONS]
     1. LANGUAGE OVERRIDE: You MUST write the ENTIRE recommendation natively in {target_lang}.
-    2. NO HALLUCINATIONS: You must recommend REAL, existing, published books by REAL authors.
+    2. ZERO HALLUCINATIONS (CRITICAL): You must identify REAL, published books. NEVER invent titles, and NEVER attribute a fake plot to a real author. If you cannot confidently identify the exact book, provide the closest REAL book and state in the synopsis that it is a conceptual match.
     3. CASING: Use normal Sentence Case for the {pitch_label}. Do NOT use Title Case for every word.
     4. FORMATTING: Plain text only. No Markdown (no asterisks).
-    5. NO FILLER: Output EXACTLY AND ONLY the requested structure. NO conversational intro/outro (e.g., do NOT say "Voici le livre" or "I think you mean...").
+    5. NO FILLER: Output EXACTLY AND ONLY the requested structure. NO conversational intro/outro.
 
     [OUTPUT STRUCTURE]
     {output_format}
