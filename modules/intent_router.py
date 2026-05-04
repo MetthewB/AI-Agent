@@ -96,6 +96,7 @@ async def parse_intent(user_text: str, history: list = None) -> list:
     3. MEDIA VS RESEARCH: If asking for something to watch, read, or listen to, ALWAYS route to movie, book, or music.
     4. THE "CHAT" FALLBACK: Only use the "chat" action if the message is purely conversational, a joke, or general knowledge.
     5. COMPOUND INTENTS: If the user asks to do multiple distinct things, you MUST break them down into MULTIPLE objects in the JSON array.
+    6. MEMORY SAVING VS RECALLING: If the user explicitly tells you to SAVE or REMEMBER new info (e.g., "memo X"), use 'memo'. If the user ASKS what they did or what you remember (e.g., "what did I do today?"), use 'chat'.
 
     [ACTION DICTIONARY & EXAMPLES]
     Format -> action_name: [Trigger description] -> Data Payload

@@ -1,3 +1,4 @@
+import re
 import html
 import random
 import difflib
@@ -193,17 +194,18 @@ async def decide_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     else:
         lang = context.user_data.get('lang', 'en')
     
-    if raw_text.startswith("/decide"):
-        options_text = " ".join(context.args)
-        options = [opt.strip() for opt in options_text.split(",") if opt.strip()]
-    else:
-        options = context.args
-    
+    options_text = " ".join(context.args).strip()
+    options = re.split(r'\s+(?:ou|or|et|and|vs)\s+|[,|/]', options_text, flags=re.IGNORECASE)
+    options = [opt.strip() for opt in options if opt.strip()]
+
+    if len(options) < 2 and " " in options_text:
+        options = [opt.strip() for opt in options_text.split() if opt.strip()]
+
     if len(options) < 2:
         if lang == 'fr':
-            error_msg = "🤔 <i>Je n'ai pas bien compris les choix. Essayez 'tacos pizza' ou 'tacos ou pizza' !</i>"
+            error_msg = "🤔 <i>Je n'ai pas bien compris les choix. Essayez 'tacos pizza', 'tacos ou pizza', ou 'tacos, pizza' !</i>"
         else:
-            error_msg = "🤔 <i>I couldn't quite distinguish the choices. Try something like 'tacos pizza' or 'tacos or pizza'!</i>"
+            error_msg = "🤔 <i>I couldn't quite distinguish the choices. Try something like 'tacos pizza', 'tacos or pizza', or 'tacos, pizza'!</i>"
             
         await update.message.reply_text(error_msg, parse_mode=ParseMode.HTML)
         return None

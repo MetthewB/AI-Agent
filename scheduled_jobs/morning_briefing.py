@@ -59,8 +59,15 @@ def get_calendar_events():
         cal_events = events(url=cal_url, start=start, end=start + timedelta(days=1))
         if not cal_events: return "Your calendar is clear for today."
         cal_events.sort(key=lambda e: e.start)
-        return "Agenda: " + " | ".join([f"{e.start.astimezone(swiss_tz).strftime('%H:%M')}: {e.summary}" for e in cal_events])
-    except: return "Could not load calendar."
+        agenda_items = []
+        for e in cal_events:
+            time_str = e.start.astimezone(swiss_tz).strftime('%H:%M')
+            display_time = "All day" if time_str == "02:00" else time_str
+            agenda_items.append(f"{display_time}: {e.summary}") 
+        return "Agenda: " + " | ".join(agenda_items)     
+    except Exception as e: 
+        print(f"Calendar Error: {e}")
+        return "Could not load calendar."
 
 def get_top_news():
     queries = ["Top world geopolitics today", "Top breaking news Switzerland", "Top breaking news France"]

@@ -244,12 +244,12 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task_instruction = "The user explicitly wants a LIST, FRANCHISE, or MARATHON. Provide 3-5 iconic movies or shows formatted as a list."
         output_format = f"🎬 [Catchy Theme or Franchise Name]\n{genre_label}: [Value]\n─────────────────\n{pitch_label}: [1-2 sentence pitch in {target_lang}]\n\n🍿 [Movie 1 Title] (Year)\n🍿 [Movie 2 Title] (Year)\n🍿 [Movie 3 Title] (Year)"
     else:
-        task_instruction = "Suggest ONE perfect movie or TV series based on the user's intent."
+        task_instruction = "If the user describes a specific movie (e.g., plot, actors, location), IDENTIFY AND RETURN THAT EXACT MOVIE. Otherwise, suggest ONE perfect movie/series based on their vibe intent."
         output_format = f"🎬 [Title] (Year)\n{genre_label}: [Value]\n─────────────────\n{pitch_label}: [1-2 sentence synopsis in {target_lang}]"
     
     prompt = f"""
     [ROLE]
-    You are an elite Media Sommelier.
+    You are an elite Media Sommelier and Movie Detective.
 
     [CONTEXT]
     User Request: "{keywords}"
@@ -264,8 +264,9 @@ async def movie_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [STRICT INSTRUCTIONS]
     1. LANGUAGE OVERRIDE: You MUST write the ENTIRE recommendation natively in {target_lang}.
     2. NO HALLUCINATIONS: You must recommend REAL, existing, released movies or TV series.
-    3. CASING: Use normal **Sentence Case** for the {pitch_label}. Do NOT use Title Case for every word in the description.
+    3. CASING: Use normal Sentence Case for the {pitch_label}. Do NOT use Title Case for every word in the description.
     4. FORMATTING: Plain text only. No Markdown (no asterisks).
+    5. NO FILLER: Output EXACTLY AND ONLY the requested structure. NO conversational intro/outro (e.g., do NOT say "Voici ma suggestion" or "I think you mean...").
 
     [OUTPUT STRUCTURE]
     {output_format}
@@ -369,12 +370,12 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task_instruction = "The user explicitly wants a PLAYLIST. Provide exactly 5 iconic tracks formatted as a list."
         output_format = f"♫ [Catchy Playlist Name]\n{genre_label}: [Value]\n─────────────────\n{vibe_label}: [1-2 sentence pitch in {target_lang}]\n\n♫ [Track 1 - Artist]\n♫ [Track 2 - Artist]\n♫ [Track 3 - Artist]\n♫ [Track 4 - Artist]\n♫ [Track 5 - Artist]"
     else:
-        task_instruction = "Suggest ONE perfect song or album based on the user's intent."
+        task_instruction = "If the user describes a specific song (e.g., lyrics, artist, melody), IDENTIFY AND RETURN THAT EXACT SONG. Otherwise, suggest ONE perfect song/album based on their vibe intent."
         output_format = f"♫ [Title - Artist]\n{genre_label}: [Value]\n─────────────────\n{vibe_label}: [1-2 sentence pitch in {target_lang}]"
 
     prompt = f"""
     [ROLE]
-    You are an elite DJ and Music Curator.
+    You are an elite DJ, Music Curator, and Song Detective.
 
     [CONTEXT]
     User Request: "{keywords}"
@@ -389,7 +390,8 @@ async def music_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [STRICT INSTRUCTIONS]
     1. LANGUAGE OVERRIDE: Write natively in {target_lang}.
     2. NO HALLUCINATIONS: REAL artists and songs only.
-    3. FORMATTING: Plain text only. No Markdown (no asterisks). Exactly 2 or 3 emojis.
+    3. FORMATTING: Plain text only. No Markdown (no asterisks).
+    4. NO FILLER: Output EXACTLY AND ONLY the requested structure. NO conversational intro/outro (e.g., do NOT say "Voici la chanson" or "The song is...").
 
     [OUTPUT STRUCTURE]
     {output_format}
@@ -497,12 +499,12 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         task_instruction = "The user explicitly wants a LIST or SERIES. Provide 3-5 iconic books formatted as a list."
         output_format = f"📚 [Catchy Theme or Series Name]\n{genre_label}: [Value]\n─────────────────\n{pitch_label}: [1-2 sentence pitch in {target_lang}]\n\n📖 [Book 1 Title] by [Author]\n📖 [Book 2 Title] by [Author]\n📖 [Book 3 Title] by [Author]"
     else:
-        task_instruction = "Suggest ONE perfect, highly-acclaimed book (fiction or non-fiction) based on the user's intent."
+        task_instruction = "If the user describes a specific book (e.g., plot, author, concept), IDENTIFY AND RETURN THAT EXACT BOOK. Otherwise, suggest ONE perfect, highly-acclaimed book based on their vibe intent."
         output_format = f"📖 [Title] by [Author] (Year)\n{genre_label}: [Value]\n─────────────────\n{pitch_label}: [1-2 sentence pitch in {target_lang}]"
 
     prompt = f"""
     [ROLE]
-    You are an elite Literary Curator and Librarian.
+    You are an elite Literary Curator, Librarian, and Book Detective.
 
     [CONTEXT]
     User Request: "{keywords}"
@@ -517,8 +519,9 @@ async def book_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     [STRICT INSTRUCTIONS]
     1. LANGUAGE OVERRIDE: You MUST write the ENTIRE recommendation natively in {target_lang}.
     2. NO HALLUCINATIONS: You must recommend REAL, existing, published books by REAL authors.
-    3. CASING: Use normal **Sentence Case** for the {pitch_label}. Do NOT use Title Case for every word.
+    3. CASING: Use normal Sentence Case for the {pitch_label}. Do NOT use Title Case for every word.
     4. FORMATTING: Plain text only. No Markdown (no asterisks).
+    5. NO FILLER: Output EXACTLY AND ONLY the requested structure. NO conversational intro/outro (e.g., do NOT say "Voici le livre" or "I think you mean...").
 
     [OUTPUT STRUCTURE]
     {output_format}
