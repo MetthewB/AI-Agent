@@ -23,7 +23,7 @@ def ask_llm(prompt: str) -> str:
     payload = {
         "model": "qwen/qwen-2.5-72b-instruct",
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 350,
+        "max_tokens": 200,
         "temperature": 0.3
     }
 
@@ -74,8 +74,8 @@ def get_top_news():
     news = []
     for q in queries:
         try:
-            for r in DDGS().news(q, timelimit="d", max_results=2):
-                news.append(f"{r.get('title')}: {r.get('body')}")
+            for r in DDGS().news(q, timelimit="d", max_results=1):
+                news.append(r.get('title'))
         except: pass
     return " | ".join(news) if news else "No news updates."
 
@@ -90,14 +90,18 @@ class MorningBriefingState(TypedDict):
 
 def briefing_writer_node(state: MorningBriefingState):
     print("\n✍️ WRITER: Drafting morning briefing...")
-    prompt = f"Write a morning briefing for {datetime.now().strftime('%A, %B %d, %Y')}. Weather: {state['weather']}. {state['agenda']}. News: {state['news']}."
+    prompt = f"Write a SHORT morning briefing for {datetime.now().strftime('%A, %B %d, %Y')}. Weather: {state['weather']}. {state['agenda']}. News: {state['news']}."
     if state['feedback']: prompt += f"\nFIX THIS: {state['feedback']}"
-    prompt += "\nRULES: Normal conversational tone. Exact 3-4 emojis. ABSOLUTELY NO MARKDOWN (no asterisks)."
+    prompt += (
+        "\nRULES: Be concise. Keep the whole message under 80 words."
+        " One short line for weather, one short line for the agenda, and at most 2 brief news headlines (no details)."
+        " Normal conversational tone. Exact 3-4 emojis. ABSOLUTELY NO MARKDOWN (no asterisks)."
+    )
     return {"draft": ask_llm(prompt).strip()}
 
 def briefing_editor_node(state: MorningBriefingState):
     print("\n🧐 EDITOR: Reviewing briefing...")
-    prompt = f"Review this. MUST NOT contain markdown/asterisks. MUST have 3-4 emojis. MUST include weather, agenda, news.\nDraft: {state['draft']}\nIf perfect, reply APPROVED. Else, reply REJECTED followed by instructions."
+    prompt = f"Review this. MUST be concise (under 80 words, one short line each for weather and agenda, max 2 brief news headlines). MUST NOT contain markdown/asterisks. MUST have 3-4 emojis. MUST include weather, agenda, news.\nDraft: {state['draft']}\nIf perfect, reply APPROVED. Else, reply REJECTED followed by instructions."
     review = ask_llm(prompt).strip()
     if review.startswith("APPROVED"): return {"status": "approved", "feedback": "", "revision_count": state["revision_count"] + 1}
     return {"status": "rejected", "feedback": review.replace("REJECTED", "").strip(), "revision_count": state["revision_count"] + 1}

@@ -20,7 +20,7 @@ def ask_llm(prompt: str) -> str:
     payload = {
         "model": "qwen/qwen-2.5-72b-instruct",
         "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 1024,
+        "max_tokens": 400,
         "temperature": 0.3 
     }
     
@@ -52,10 +52,10 @@ def market_researcher_node(state: FinancialReportState):
     query = state.get("feedback") or state["topic"]
 
     try:
-        results = DDGS().news(query, timelimit="d", max_results=5)
+        results = DDGS().news(query, timelimit="d", max_results=3)
         if not results:
-            results = DDGS().text(query, timelimit="m", max_results=5)
-        snippets = "\n".join([f"- [{r.get('date', 'Recent')}] {r.get('title', '')}: {r.get('body', '')}" for r in results])
+            results = DDGS().text(query, timelimit="m", max_results=3)
+        snippets = "\n".join([f"- {r.get('title', '')}" for r in results])
     except Exception as e:
         snippets = f"Search Error: {e}"
         
@@ -85,14 +85,19 @@ def financial_writer_node(state: FinancialReportState):
     today = datetime.now().strftime("%A, %B %d, %Y")
     
     prompt = f"""
-    You are an expert Financial Analyst. Today is {today}. 
-    Write a highly concise, 2 to 3 paragraph daily briefing about: '{state["topic"]}'.
-    
+    You are an expert Financial Analyst. Today is {today}.
+    Write a SHORT, punchy daily briefing about: '{state["topic"]}'. Keep it under 120 words total.
+
+    STRUCTURE (one short line each, no fluff, get straight to the point):
+    - Markets: the single most important global trend today.
+    - Portfolio: the exact numbers below, one line.
+    - Swiss jobs: one line on the engineering job market.
+
     CRITICAL RULES:
     - NEVER use asterisks (*). No Markdown formatting.
-    - Use emojis naturally to separate ideas.
-    - Combine Global Market Trends, USER PORTFOLIO updates (using exact numbers below), and Swiss Engineering Job Market news.
-    
+    - Use a few emojis naturally to separate ideas.
+    - No preamble, no sign-off, no filler. Lead with the takeaway.
+
     Raw News Data:
     {state["raw_research"]}
 
@@ -104,7 +109,7 @@ def financial_writer_node(state: FinancialReportState):
 def chief_editor_node(state: FinancialReportState):
     print("\n🧐 EDITOR: Reviewing financial draft...")
     prompt = f"""
-    Review this draft. It MUST be short (2-3 paragraphs), have ZERO markdown/asterisks, and explicitly mention the portfolio (EUNL, EUNM, ACM9, Gold) and Swiss engineering jobs.
+    Review this draft. It MUST be very short and straight to the point (under 120 words, roughly one line each for markets, portfolio, and Swiss jobs), have ZERO markdown/asterisks, no preamble or sign-off, and explicitly mention the portfolio (EUNL, EUNM, ACM9, Gold) and Swiss engineering jobs.
     Draft: {state["draft_report"]}
     If perfect, reply EXACTLY: APPROVED. Otherwise, reply REJECTED followed by what to fix.
     """
