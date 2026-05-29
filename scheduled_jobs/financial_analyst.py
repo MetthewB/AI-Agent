@@ -18,6 +18,8 @@ def ask_llm(prompt: str) -> str:
     }
     
     FREE_MODELS = [
+        "google/gemma-4-31b-it:free",
+        "openai/gpt-oss-20b:free",
         "meta-llama/llama-3-8b-instruct:free",
         "mistralai/mistral-7b-instruct:free",
         "openrouter/auto"
@@ -78,7 +80,7 @@ def market_researcher_node(state: FinancialReportState):
         print("   -> Fetching live portfolio data...")
         portfolio_map = {
             "EUNL.DE": "MSCI World (EUNL)", "EUNM.DE": "MSCI Emerging Mkts (EUNM)",
-            "ACM9.DE": "MSCI World SRI (ACM9)", "XAUUSD=X": "Gold (XAU)"
+            "ACM9.DE": "MSCI World SRI (ACM9)", "GC=F": "Gold (GC=F)" 
         }
         stats = []
         for ticker, name in portfolio_map.items():
