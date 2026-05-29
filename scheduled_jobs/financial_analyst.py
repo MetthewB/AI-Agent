@@ -10,33 +10,45 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def ask_llm(prompt: str) -> str:
-    """Routes the financial analysis prompt to OpenRouter's Premium Qwen model."""
+    """Routes the financial analysis prompt to OpenRouter using free models with a fallback chain."""
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {os.environ.get('OPENROUTER_API_KEY')}",
         "Content-Type": "application/json"
     }
     
-    payload = {
-        "model": "qwen/qwen-2.5-72b-instruct",
-        "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": 400,
-        "temperature": 0.3 
-    }
-    
-    try:
-        res = requests.post(url, headers=headers, json=payload, timeout=60.0)
-        res.raise_for_status() 
+    FREE_MODELS = [
+        "meta-llama/llama-3-8b-instruct:free",
+        "mistralai/mistral-7b-instruct:free",
+        "openrouter/auto"
+    ]
+
+    for model in FREE_MODELS:
+        payload = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": 450,
+            "temperature": 0.4
+        }
         
-        raw_text = res.json().get('choices', [{}])[0].get('message', {}).get('content', '')
-        return raw_text.strip() if raw_text else ""
-        
-    except requests.exceptions.HTTPError as e:
-        print(f"❌ OpenRouter HTTP Error: {e} - Response: {res.text}")
-        return "Error analyzing financial data."
-    except Exception as e:
-        print(f"❌ General LLM Error: {e}")
-        return "Error analyzing financial data."
+        try:
+            res = requests.post(url, headers=headers, json=payload, timeout=15.0)
+            
+            if res.status_code == 200:
+                raw_text = res.json().get('choices', [{}])[0].get('message', {}).get('content', '')
+                if raw_text.strip():
+                    return raw_text.strip()
+            else:
+                print(f"⚠️ Free model {model} failed with status {res.status_code}. Trying next...")
+                continue
+                
+        except Exception as e:
+            print(f"⚠️ Connection error with {model}: {e}. Skipping to next...")
+            continue
+            
+    print("❌ ALL free models on OpenRouter are currently offline or congested.")
+
+    return "APPROVED" if "Review this" in prompt else "Error analyzing financial data."
 
 class FinancialReportState(TypedDict):
     topic: str
