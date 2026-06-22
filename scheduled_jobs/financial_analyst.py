@@ -100,11 +100,11 @@ def financial_writer_node(state: FinancialReportState):
     Write a clean daily financial briefing. Keep it under 150 words total.
     
     CRITICAL STRUCTURE (You MUST separate these 3 blocks with double newlines):
-    [Global Markets]
+    Global Markets: ...
     
-    [Portfolio]
+    Portfolio: ...
     
-    [Jobs in Switzerland]
+    Jobs in Switzerland: ...
 
     RULES:
     1. Global Markets: Highlight the single most important global macro trend or tech tilt today.
