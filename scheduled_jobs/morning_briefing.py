@@ -54,7 +54,7 @@ def get_weather(lat=46.5197, lon=6.6323):
         daily = requests.get(url).json()['daily']
         code = daily['weathercode'][0]
         wmo_map = {0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Foggy", 51: "Light drizzle", 61: "Light rain", 71: "Light snow", 95: "Thunderstorm"}
-        return f"{wmo_map.get(code, 'Mixed weather')} today, with temperature from {daily['temperature_2m_min'][0]} to {daily['temperature_2m_max'][0]}°C"
+        return f"{wmo_map.get(code, 'Mixed weather').lower()}, with temperatures going from {daily['temperature_2m_min'][0]}°C up to {daily['temperature_2m_max'][0]}°C"
     except: 
         return "Weather unavailable"
 
@@ -66,7 +66,7 @@ def get_calendar_events():
         swiss_tz = pytz.timezone('Europe/Zurich')
         start = datetime.now(swiss_tz).replace(hour=0, minute=0, second=0, microsecond=0)
         cal_events = events(url=cal_url, start=start, end=start + timedelta(days=1))
-        if not cal_events: return "Your calendar is clear for today."
+        if not cal_events: return "Your calendar is clear today."
         cal_events.sort(key=lambda e: e.start)
         agenda_items = []
         for e in cal_events:
@@ -79,7 +79,15 @@ def get_calendar_events():
         return "Could not load calendar."
 
 def get_top_news():
-    return " | ".join(f"{e} {r['title']}" for e, q in [("🌍", "world"), ("🇨🇭", "Switzerland"), ("🇫🇷", "France")] for r in DDGS().news(q, max_results=1)) or "No news"
+    news_items = []
+    for emoji, query in [("🌍", "world geopolitics"), ("🇨🇭", "Switzerland breaking news"), ("🇫🇷", "France breaking news")]:
+        try:
+            for r in DDGS().news(query, max_results=1):
+                title = r.get('title', '')
+                body = r.get('body', '')
+                news_items.append(f"{emoji} {title} - {body}")
+        except: pass
+    return "\n".join(news_items) if news_items else "No news"
 
 class MorningBriefingState(TypedDict):
     weather: str
@@ -92,16 +100,46 @@ class MorningBriefingState(TypedDict):
 
 def briefing_writer_node(state: MorningBriefingState):
     print("\n✍️ WRITER: Drafting morning briefing...")
-    prompt = f"Write a SHORT morning briefing for {datetime.now().strftime('%A, %B %d, %Y')}. Weather: {state['weather']}. {state['agenda']}. News: {state['news']}."
-    if state['feedback']: prompt += f"\nFIX THIS: {state['feedback']}"
-    prompt += (
-        "\nRULES: Keep it under 100 words. One short line for weather, one for agenda, and exactly 3 news headlines (1 🌍, 1 🇨🇭, 1 🇫🇷). No markdown."
-    )
+    today_str = datetime.now().strftime('%A, %B %d, %Y')
+    
+    prompt = f"""
+    Write a morning briefing.
+    
+    REQUIRED STRUCTURE AND TONE (Conversational & Warm):
+    Good morning! It is {today_str}. The weather today is {state['weather']}. [Weather Emoji]
+    {state['agenda']} [Coffee/Calendar Emoji]
+    
+    [For the news below, write a brief, informative 1-2 sentence summary for each. Do not just repeat the title; use the provided context to explain what is actually happening.]
+    {state['news']}
+
+    RULES: 
+    - Keep the exact greeting format above.
+    - Keep it under 150 words.
+    - Make sure the news points are informative and give actual details.
+    - Do not add any filler text, preamble, or sign-offs.
+    - ABSOLUTELY NO MARKDOWN (no asterisks, no bolding).
+    """
+    
+    if state['feedback']: 
+        prompt += f"\nFIX THIS FROM PREVIOUS DRAFT: {state['feedback']}"
+        
     return {"draft": ask_llm(prompt).strip()}
 
 def briefing_editor_node(state: MorningBriefingState):
     print("\n🧐 EDITOR: Reviewing briefing...")
-    prompt = f"Review this. MUST be under 100 words, no markdown, include weather, agenda, and exactly 3 news headlines (🌍, 🇨🇭, 🇫🇷).\nDraft: {state['draft']}\nIf perfect, reply APPROVED. Else, reply REJECTED followed by instructions."    
+    prompt = f"""
+    Review this briefing. 
+    It MUST start with a warm conversational greeting like "Good morning! It is [Date]. The weather today is..."
+    It MUST weave the agenda into the conversational flow.
+    It MUST include exactly 3 informative news summaries (🌍, 🇨🇭, 🇫🇷). The news must actually explain what happened, not just be vague titles.
+    It MUST NOT contain any markdown or asterisks whatsoever.
+    It MUST be under 150 words.
+    
+    Draft: 
+    {state['draft']}
+    
+    If perfect, reply EXACTLY: APPROVED. Else, reply REJECTED followed by what to fix.
+    """    
     review = ask_llm(prompt).strip()
     if review.startswith("APPROVED"): return {"status": "approved", "feedback": "", "revision_count": state["revision_count"] + 1}
     return {"status": "rejected", "feedback": review.replace("REJECTED", "").strip(), "revision_count": state["revision_count"] + 1}

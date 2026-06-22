@@ -63,13 +63,10 @@ class FinancialReportState(TypedDict):
 
 def market_researcher_node(state: FinancialReportState):
     print("\n🔍 RESEARCHER: Gathering market information...")
-    query = state.get("feedback") or state["topic"]
-
+    query = state.get("feedback") or f"{state['topic']} AND (Swiss AI jobs OR Switzerland tech hiring)"
     try:
-        results = DDGS().news(query, timelimit="d", max_results=3)
-        if not results:
-            results = DDGS().text(query, timelimit="m", max_results=3)
-        snippets = "\n".join([f"- {r.get('title', '')}" for r in results])
+        results = DDGS().news(query, timelimit="d", max_results=3) or DDGS().text(query, timelimit="m", max_results=3)
+        snippets = "\n".join([f"- {r.get('title', '')}: {r.get('body', '')}" for r in results])
     except Exception as e:
         snippets = f"Search Error: {e}"
         
@@ -79,8 +76,10 @@ def market_researcher_node(state: FinancialReportState):
     if not portfolio_data:
         print("   -> Fetching live portfolio data...")
         portfolio_map = {
-            "EUNL.DE": "MSCI World (EUNL)", "EUNM.DE": "MSCI Emerging Mkts (EUNM)",
-            "DE5A.DE": "Euro Govnt Bond (DE5A)", "GC=F": "Gold (GC=F)" 
+            "EUNL.DE": "MSCI World (EUNL)", 
+            "EUNM.DE": "MSCI Emerging Markets (EUNM)", 
+            "DE5A.DE": "Euro Government Bond (DE5A)", 
+            "GC=F": "Gold (XAU)"
         }
         stats = []
         for ticker, name in portfolio_map.items():
@@ -89,7 +88,7 @@ def market_researcher_node(state: FinancialReportState):
                 if len(hist) >= 2:
                     curr, prev = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
                     pct = ((curr - prev) / prev) * 100
-                    stats.append(f"{name} {curr:.2f} ({pct:+.2f}%) {'📈' if pct >= 0 else '📉'}")
+                    stats.append(f"{name}: {curr:.2f} ({pct:+.2f}%) {'📈' if pct >= 0 else '📉'}")
             except: pass
         portfolio_data = "\n".join(stats)
 
@@ -98,19 +97,26 @@ def market_researcher_node(state: FinancialReportState):
 def financial_writer_node(state: FinancialReportState):
     print("\n✍️ WRITER: Drafting the financial report...")
     prompt = f"""
-    Write a daily briefing for {datetime.now().strftime('%A, %B %d, %Y')} about: '{state["topic"]}'. Under 120 words.
+    Write a clean daily financial briefing. Keep it under 150 words total.
     
-    STRUCTURE:
-    - Markets: Short global macro takeaway.
-    - Portfolio: Include the exact raw block below cleanly.
-    - Swiss jobs: Short line on Swiss engineering job market.
+    CRITICAL STRUCTURE (You MUST separate these 3 blocks with double newlines):
+    [Global Markets Paragraph]
+    
+    [Portfolio Block]
+    
+    [Swiss Engineering Jobs Paragraph]
 
-    RULES: No markdown, no asterisks, no headers, no filler.
+    RULES:
+    1. Global Markets: Highlight the single most important global macro trend or tech tilt today.
+    2. Portfolio Block: Output the exact raw lines provided below as-is.
+    3. Swiss Engineering Jobs: Focus explicitly on AI-oriented roles, Machine Learning, and software talent. Mention active companies with job offers and their locations in Switzerland (e.g., IBM in Zurich, Merck in Aubonne, or others found in the news data).
+    4. Formatting: ABSOLUTELY NO MARKDOWN (no asterisks, no bolding, no headers). 
+    5. Emojis: Use a few emojis naturally to break up the flow.
 
-    Portfolio Data:
+    Exact Portfolio Block to Output:
     {state["portfolio_data"]}
 
-    News:
+    News Data for Context:
     {state["raw_research"]}
     """
     return {"draft_report": ask_llm(prompt).strip()}
@@ -118,16 +124,20 @@ def financial_writer_node(state: FinancialReportState):
 def chief_editor_node(state: FinancialReportState):
     print("\n🧐 EDITOR: Reviewing financial draft...")
     prompt = f"""
-    Review this draft. Must be under 120 words, zero markdown/asterisks, and explicitly cover Markets trends, the Portfolio (EUNL, EUNM, DE5A, Gold), and Swiss engineering jobs.
-    Draft: {state["draft_report"]}
-    If perfect, reply APPROVED. Else, reply REJECTED followed by what to fix.
+    Review this draft. 
+    - It MUST be under 150 words.
+    - It MUST have double newlines separating Markets, Portfolio, and Swiss Jobs.
+    - It MUST have ZERO markdown/asterisks.
+    - The Swiss Jobs section MUST explicitly focus on AI engineering talent and name companies along with their specific Swiss locations.
+    
+    Draft: 
+    {state["draft_report"]}
+    
+    If perfect, reply APPROVED. Otherwise, reply REJECTED followed by raw instructions.
     """
     review = ask_llm(prompt).strip()
-    
     if review.startswith("APPROVED"):
-        print("   -> Decision: APPROVED!")
         return {"status": "approved", "feedback": "", "revision_count": state["revision_count"] + 1}
-    print(f"   -> Decision: REJECTED. Fixes: {review.replace('REJECTED', '')}")
     return {"status": "rejected", "feedback": review.replace("REJECTED", "").strip(), "revision_count": state["revision_count"] + 1}
 
 def publish_report_node(state: FinancialReportState):
