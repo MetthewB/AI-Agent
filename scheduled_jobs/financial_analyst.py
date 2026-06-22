@@ -80,52 +80,47 @@ def market_researcher_node(state: FinancialReportState):
         print("   -> Fetching live portfolio data...")
         portfolio_map = {
             "EUNL.DE": "MSCI World (EUNL)", "EUNM.DE": "MSCI Emerging Mkts (EUNM)",
-            "ACM9.DE": "MSCI World SRI (ACM9)", "GC=F": "Gold (GC=F)" 
+            "DE5A.DE": "Euro Govnt Bond (DE5A)", "GC=F": "Gold (GC=F)" 
         }
         stats = []
         for ticker, name in portfolio_map.items():
             try:
                 hist = yf.Ticker(ticker).history(period="2d")
                 if len(hist) >= 2:
-                    current, prev = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
-                    stats.append(f"{name}: {current:.2f} ({((current - prev) / prev) * 100:+.2f}%)")
+                    curr, prev = hist['Close'].iloc[-1], hist['Close'].iloc[-2]
+                    pct = ((curr - prev) / prev) * 100
+                    stats.append(f"{name} {curr:.2f} ({pct:+.2f}%) {'📈' if pct >= 0 else '📉'}")
             except: pass
-        portfolio_data = "USER PORTFOLIO DATA: " + " | ".join(stats)
+        portfolio_data = "\n".join(stats)
 
     return {"raw_research": new_research, "portfolio_data": portfolio_data}
 
 def financial_writer_node(state: FinancialReportState):
     print("\n✍️ WRITER: Drafting the financial report...")
-    today = datetime.now().strftime("%A, %B %d, %Y")
-    
     prompt = f"""
-    You are an expert Financial Analyst. Today is {today}.
-    Write a SHORT, punchy daily briefing about: '{state["topic"]}'. Keep it under 120 words total.
+    Write a daily briefing for {datetime.now().strftime('%A, %B %d, %Y')} about: '{state["topic"]}'. Under 120 words.
+    
+    STRUCTURE:
+    - Markets: Short global macro takeaway.
+    - Portfolio: Include the exact raw block below cleanly.
+    - Swiss jobs: Short line on Swiss engineering job market.
 
-    STRUCTURE (one short line each, no fluff, get straight to the point):
-    - Markets: the single most important global trend today.
-    - Portfolio: the exact numbers below, one line.
-    - Swiss jobs: one line on the engineering job market.
+    RULES: No markdown, no asterisks, no headers, no filler.
 
-    CRITICAL RULES:
-    - NEVER use asterisks (*). No Markdown formatting.
-    - Use a few emojis naturally to separate ideas.
-    - No preamble, no sign-off, no filler. Lead with the takeaway.
-
-    Raw News Data:
-    {state["raw_research"]}
-
-    Live Portfolio Data:
+    Portfolio Data:
     {state["portfolio_data"]}
+
+    News:
+    {state["raw_research"]}
     """
     return {"draft_report": ask_llm(prompt).strip()}
 
 def chief_editor_node(state: FinancialReportState):
     print("\n🧐 EDITOR: Reviewing financial draft...")
     prompt = f"""
-    Review this draft. It MUST be very short and straight to the point (under 120 words, roughly one line each for markets, portfolio, and Swiss jobs), have ZERO markdown/asterisks, no preamble or sign-off, and explicitly mention the portfolio (EUNL, EUNM, ACM9, Gold) and Swiss engineering jobs.
+    Review this draft. Must be under 120 words, zero markdown/asterisks, and explicitly cover Markets trends, the Portfolio (EUNL, EUNM, DE5A, Gold), and Swiss engineering jobs.
     Draft: {state["draft_report"]}
-    If perfect, reply EXACTLY: APPROVED. Otherwise, reply REJECTED followed by what to fix.
+    If perfect, reply APPROVED. Else, reply REJECTED followed by what to fix.
     """
     review = ask_llm(prompt).strip()
     

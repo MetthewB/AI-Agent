@@ -50,11 +50,13 @@ def ask_llm(prompt: str) -> str:
 
 def get_weather(lat=46.5197, lon=6.6323):
     try:
-        res = requests.get(f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&current_weather=true").json()
-        code = res['current_weather']['weathercode']
+        url = f"https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}&daily=weathercode,temperature_2m_max,temperature_2m_min&timezone=auto"
+        daily = requests.get(url).json()['daily']
+        code = daily['weathercode'][0]
         wmo_map = {0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Foggy", 51: "Light drizzle", 61: "Light rain", 71: "Light snow", 95: "Thunderstorm"}
-        return f"{res['current_weather']['temperature']}°C and {wmo_map.get(code, 'Mixed weather')}"
-    except: return "Weather unavailable"
+        return f"{wmo_map.get(code, 'Mixed weather')} today, with temperature from {daily['temperature_2m_min'][0]} to {daily['temperature_2m_max'][0]}°C"
+    except: 
+        return "Weather unavailable"
 
 def get_calendar_events():
     cal_url = os.environ.get("APPLE_CALENDAR_URL")
@@ -77,14 +79,7 @@ def get_calendar_events():
         return "Could not load calendar."
 
 def get_top_news():
-    queries = ["Top world geopolitics today", "Top breaking news Switzerland", "Top breaking news France"]
-    news = []
-    for q in queries:
-        try:
-            for r in DDGS().news(q, timelimit="d", max_results=1):
-                news.append(r.get('title'))
-        except: pass
-    return " | ".join(news) if news else "No news updates."
+    return " | ".join(f"{e} {r['title']}" for e, q in [("🌍", "world"), ("🇨🇭", "Switzerland"), ("🇫🇷", "France")] for r in DDGS().news(q, max_results=1)) or "No news"
 
 class MorningBriefingState(TypedDict):
     weather: str
@@ -100,15 +95,13 @@ def briefing_writer_node(state: MorningBriefingState):
     prompt = f"Write a SHORT morning briefing for {datetime.now().strftime('%A, %B %d, %Y')}. Weather: {state['weather']}. {state['agenda']}. News: {state['news']}."
     if state['feedback']: prompt += f"\nFIX THIS: {state['feedback']}"
     prompt += (
-        "\nRULES: Be concise. Keep the whole message under 80 words."
-        " One short line for weather, one short line for the agenda, and at most 2 brief news headlines (no details)."
-        " Normal conversational tone. Exact 3-4 emojis. ABSOLUTELY NO MARKDOWN (no asterisks)."
+        "\nRULES: Keep it under 100 words. One short line for weather, one for agenda, and exactly 3 news headlines (1 🌍, 1 🇨🇭, 1 🇫🇷). No markdown."
     )
     return {"draft": ask_llm(prompt).strip()}
 
 def briefing_editor_node(state: MorningBriefingState):
     print("\n🧐 EDITOR: Reviewing briefing...")
-    prompt = f"Review this. MUST be concise (under 80 words, one short line each for weather and agenda, max 2 brief news headlines). MUST NOT contain markdown/asterisks. MUST have 3-4 emojis. MUST include weather, agenda, news.\nDraft: {state['draft']}\nIf perfect, reply APPROVED. Else, reply REJECTED followed by instructions."
+    prompt = f"Review this. MUST be under 100 words, no markdown, include weather, agenda, and exactly 3 news headlines (🌍, 🇨🇭, 🇫🇷).\nDraft: {state['draft']}\nIf perfect, reply APPROVED. Else, reply REJECTED followed by instructions."    
     review = ask_llm(prompt).strip()
     if review.startswith("APPROVED"): return {"status": "approved", "feedback": "", "revision_count": state["revision_count"] + 1}
     return {"status": "rejected", "feedback": review.replace("REJECTED", "").strip(), "revision_count": state["revision_count"] + 1}
