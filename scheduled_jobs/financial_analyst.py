@@ -100,16 +100,16 @@ def financial_writer_node(state: FinancialReportState):
     Write a clean daily financial briefing. Keep it under 150 words total.
     
     CRITICAL STRUCTURE (You MUST separate these 3 blocks with double newlines):
-    [Global Markets Paragraph]
+    [Global Markets]
     
-    [Portfolio Block]
+    [Portfolio]
     
-    [Swiss Engineering Jobs Paragraph]
+    [Jobs in Switzerland]
 
     RULES:
     1. Global Markets: Highlight the single most important global macro trend or tech tilt today.
-    2. Portfolio Block: Output the exact raw lines provided below as-is.
-    3. Swiss Engineering Jobs: Focus explicitly on AI-oriented roles, Machine Learning, and software talent. Mention active companies with job offers and their locations in Switzerland (e.g., IBM in Zurich, Merck in Aubonne, or others found in the news data).
+    2. Portfolio: Output the exact raw lines provided below as-is.
+    3. Jobs in Switzerland: Focus explicitly on AI-oriented roles, Machine Learning, and software talent. Mention active companies with job offers and their locations in Switzerland.
     4. Formatting: ABSOLUTELY NO MARKDOWN (no asterisks, no bolding, no headers). 
     5. Emojis: Use a few emojis naturally to break up the flow.
 
@@ -125,7 +125,7 @@ def chief_editor_node(state: FinancialReportState):
     print("\n🧐 EDITOR: Reviewing financial draft...")
     prompt = f"""
     Review this draft. 
-    - It MUST be under 150 words.
+    - It MUST be under 120 words.
     - It MUST have double newlines separating Markets, Portfolio, and Swiss Jobs.
     - It MUST have ZERO markdown/asterisks.
     - The Swiss Jobs section MUST explicitly focus on AI engineering talent and name companies along with their specific Swiss locations.

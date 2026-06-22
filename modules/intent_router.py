@@ -128,8 +128,8 @@ async def parse_intent(user_text: str, history: list = None) -> list:
       * Ex: "qui a gagné le match hier" -> data: "qui a gagné le match hier" | "SpaceX launch status" -> data: "SpaceX launch status"
     - time: User asks what time it is, what day it is, or wants the current date/clock.
       * Ex: "quelle heure est il" -> data: "" | "what is the date today" -> data: ""
-    - memo: User asks to make a reminder of what he says later.
-      * Ex: "rappelle-moi que j'ai mangé du boeuf ce midi" -> data: "j'ai mangé du boeuf ce midi" | "note that I went shopping at 5pm" -> data: "I went shopping at 5pm"
+    - memo: User explicitly tells you to SAVE, RECORD, or NOTE down new information for later. DO NOT use this if they are asking a question about the past.
+      * Ex: "rappelle-moi que j'ai mangé du boeuf ce midi" -> data: "j'ai mangé du boeuf ce midi" | "memo: j'ai fait de la muscu" -> data: "j'ai fait de la muscu"
 
     --- HEALTH & LIFESTYLE ---
     - train: User wants a workout or training plan. 
@@ -154,8 +154,8 @@ async def parse_intent(user_text: str, history: list = None) -> list:
     --- FALLBACK, CONVERSATION & IGNORE ---
     - ignore: The user is talking to someone else in a group chat, or the message is clearly not directed at you.
       * Ex: "tu veux manger quoi ce soir ?" -> data: "" | "j'ai acheté le lait" -> data: ""
-    - chat: User EXPLICITLY asks the bot a question, wants a joke, or makes conversation WITH THE BOT. 
-      * Ex: "comment soigner un hoquet" -> data: "comment soigner un hoquet" | "hello" -> data: "hello"
+    - chat: User EXPLICITLY asks a question, wants a joke, makes conversation, OR asks you to RECALL something from memory (e.g., "what did I do today?", "what do I like?").
+      * Ex: "qu'ai-je fait aujourd'hui ?" -> data: "qu'ai-je fait aujourd'hui ?" | "comment soigner un hoquet" -> data: "comment soigner un hoquet"
 
     [PREVIOUS CONVERSATION CONTEXT]
     {history_text}

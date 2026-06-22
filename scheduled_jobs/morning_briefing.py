@@ -109,7 +109,21 @@ def briefing_writer_node(state: MorningBriefingState):
     Good morning! It is {today_str}. The weather today is {state['weather']}. [Weather Emoji]
     {state['agenda']} [Coffee/Calendar Emoji]
     
-    [For the news below, write a brief, informative 1-2 sentence summary for each. Do not just repeat the title; use the provided context to explain what is actually happening.]
+    [News Paragraph 1]
+    
+    [News Paragraph 2]
+    
+    [News Paragraph 3]
+
+    NEWS RULES:
+    - You must write exactly 3 distinct news blocks separated by double newlines (one for 🌍, one for 🇨🇭, and one for 🇫🇷).
+    - Start each news block directly with its emoji (🌍, 🇨🇭, or 🇫🇷) followed by prefixes like "World:", "Switzerland:", or "France:", immediatly followed by the informative 1-2 sentence summary.
+    
+    CRITICAL FORMATTING RULES:
+    - ABSOLUTELY NO MARKDOWN (no asterisks, no headers, no bolding).
+    - No filler text, intro preambles, or closing sign-offs.
+
+    News Data Context:
     {state['news']}
 
     RULES: 
@@ -128,17 +142,19 @@ def briefing_writer_node(state: MorningBriefingState):
 def briefing_editor_node(state: MorningBriefingState):
     print("\n🧐 EDITOR: Reviewing briefing...")
     prompt = f"""
-    Review this briefing. 
-    It MUST start with a warm conversational greeting like "Good morning! It is [Date]. The weather today is..."
-    It MUST weave the agenda into the conversational flow.
-    It MUST include exactly 3 informative news summaries (🌍, 🇨🇭, 🇫🇷). The news must actually explain what happened, not just be vague titles.
-    It MUST NOT contain any markdown or asterisks whatsoever.
-    It MUST be under 150 words.
+    Review this briefing draft. 
+    
+    CRITICAL CHECKLIST:
+    1. It MUST have double newlines separating the greeting/agenda from the news, and double newlines separating each of the 3 news blocks.
+    2. The 3 news blocks MUST start directly with their emojis (🌍, 🇨🇭, 🇫🇷). 
+    3. There MUST be written label prefixes (like "World:", "France:", etc.) right after the emojis.
+    4. There MUST be ZERO markdown or asterisks anywhere in the text.
+    5. The text must be under 150 words total.
     
     Draft: 
     {state['draft']}
     
-    If perfect, reply EXACTLY: APPROVED. Else, reply REJECTED followed by what to fix.
+    If perfect, reply EXACTLY: APPROVED. Else, reply REJECTED followed by raw instructions on what to fix.
     """    
     review = ask_llm(prompt).strip()
     if review.startswith("APPROVED"): return {"status": "approved", "feedback": "", "revision_count": state["revision_count"] + 1}
