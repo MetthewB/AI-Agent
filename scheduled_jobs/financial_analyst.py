@@ -85,7 +85,6 @@ def market_researcher_node(state: FinancialReportState):
                     stats.append(f"{name}: {curr:.2f} ({pct:+.2f}%) {'📈' if pct >= 0 else '📉'}")
             except: pass
         portfolio_data = "\n".join(stats) if stats else "Portfolio data unavailable."
-        print(f"   -> Portfolio data fetched:\n{portfolio_data}") 
 
     return {"raw_research": new_research, "portfolio_data": portfolio_data}
 
@@ -100,6 +99,12 @@ def validate_report(draft: str) -> tuple[bool, str]:
     blocks = [b.strip() for b in draft.split("\n\n") if b.strip()]
     if len(blocks) < 3:
         return False, "Missing double newlines between sections."
+    portfolio_idx = draft.find("Portfolio:")
+    switzerland_idx = draft.find("Jobs in Switzerland:")
+    if portfolio_idx != -1 and switzerland_idx != -1:
+        portfolio_content = draft[portfolio_idx + len("Portfolio:"):switzerland_idx].strip()
+        if not portfolio_content:
+            return False, "Portfolio section is empty."
     return True, ""
 
 def financial_writer_node(state: FinancialReportState):
@@ -112,17 +117,14 @@ def financial_writer_node(state: FinancialReportState):
     prompt = (
         f"You are a financial briefing writer. Output the briefing text only — no preamble, no sign-off, no commentary.\n\n"
         f"{feedback_block}"
-        f"Write the briefing using EXACTLY this structure (replace bracketed parts):\n\n"
+        f"Write EXACTLY these 2 blocks, separated by a blank line:\n\n"
         f"Global Markets: [1-2 sentences on the single most important macro or tech market trend today. Use an emoji.]\n\n"
-        f"Portfolio:\n{state['portfolio_data']}\n\n"
         f"Jobs in Switzerland: [2-3 sentences naming specific companies actively hiring for AI, ML, or software roles in Switzerland, including their city locations.]\n\n"
         f"STRICT RULES:\n"
-        f"- Output ONLY the briefing. Start with 'Global Markets:' and end after the Switzerland jobs block.\n"
-        f"- Separate each of the 3 sections with a blank line.\n"
+        f"- Output ONLY these 2 blocks. Start with 'Global Markets:' and end after the Switzerland jobs block.\n"
+        f"- Separate the 2 blocks with a blank line.\n"
         f"- No markdown whatsoever. No asterisks, no bold, no italics, no bullet points, no headers. Not even a single * character.\n"
-        f"- Do NOT wrap the output in asterisks or any other punctuation.\n"
-        f"- Total length: under 150 words.\n"
-        f"- The Portfolio block must be reproduced exactly as provided above — do not reword or reformat it.\n"
+        f"- Total length: under 100 words.\n"
         f"- The Switzerland jobs section must name real companies and real Swiss cities.\n\n"
         f"NEWS DATA:\n{state['raw_research']}"
     )
@@ -131,9 +133,18 @@ def financial_writer_node(state: FinancialReportState):
     if not result:
         print("❌ All models failed, skipping this run.")
         return {"draft_report": "", "status": "failed"}
-    
+
     clean_result = result.strip().strip("*").strip()
-    return {"draft_report": clean_result}
+    portfolio_block = f"Portfolio:\n{state['portfolio_data']}"
+
+    if "Jobs in Switzerland:" in clean_result:
+        parts = clean_result.split("Jobs in Switzerland:", 1)
+        final_report = f"{parts[0].strip()}\n\n{portfolio_block}\n\nJobs in Switzerland:{parts[1]}"
+    else:
+        final_report = f"{clean_result}\n\n{portfolio_block}"
+
+    print(f"   -> Portfolio injected:\n{state['portfolio_data']}")
+    return {"draft_report": final_report}
 
 def chief_editor_node(state: FinancialReportState):
     print("\n🧐 EDITOR: Validating financial draft...")
