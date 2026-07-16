@@ -31,7 +31,7 @@ def ask_llm(prompt: str) -> str:
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 450,
+            "max_tokens": 800,
             "temperature": 0.4
         }
         
@@ -46,7 +46,7 @@ def ask_llm(prompt: str) -> str:
         except Exception as e:
             print(f"⚠️ {model} connection error: {e}. Trying next...")
             
-    return "APPROVED" if "Review this" in prompt else "Error generating report."
+    return "REJECTED: All models unavailable." if "Review this" in prompt else "Error generating report."
 
 def get_weather(lat=46.5197, lon=6.6323):
     try:
