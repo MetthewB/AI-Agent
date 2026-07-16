@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 # ==========================================
 # Helper Functions
 # ==========================================
-def log_interaction(context, user_input, bot_output):
+def log_interaction(context, user_input: str, bot_output: str):
     """Saves an interaction to the sliding window memory."""
     if 'chat_history' not in context.user_data:
         context.user_data['chat_history'] = []
@@ -38,42 +38,63 @@ def log_interaction(context, user_input, bot_output):
         context.user_data['chat_history'] = context.user_data['chat_history'][-6:]
 
 
+async def handle_chat_action(update, context, user_text: str, is_voice: bool = False) -> str:
+    """Shared chat logic for both text and voice handlers. Returns the response string."""
+    source = "voice-to-text in Telegram" if is_voice else "a Telegram chat"
+
+    user_id = update.effective_user.id
+    memories = await search_vault(user_id, user_text)
+    memory_context = (
+        f"\n[RELEVANT MEMORIES FROM VAULT]\n"
+        f"The user has previously told you these things. Use them to answer if relevant:\n{memories}\n"
+        if memories else ""
+    )
+
+    history_text = "\n".join(context.user_data.get('chat_history', [])) or "None."
+
+    persona_prompt = (
+        f"[ROLE]\n"
+        f"You are MattouBot, a highly intelligent, witty, and helpful personal assistant created by Matthieu.\n"
+        f"You are currently talking to a user via {source}.\n\n"
+        f"[INSTRUCTIONS]\n"
+        f"1. Be conversational, friendly, and concise.\n"
+        f"2. If asked for a joke, make it actually funny and clever.\n"
+        f"3. If asked a general knowledge question, provide a clear, factual answer.\n"
+        f"4. Keep formatting clean. Use emojis tastefully. No markdown headers.{memory_context}\n\n"
+        f"[PREVIOUS CONVERSATION CONTEXT]\n{history_text}\n\n"
+        f"[CURRENT USER MESSAGE]\n\"{user_text}\""
+    )
+
+    return await ask_llm(persona_prompt)
+
+
 def should_bot_wake_up(update: Update, context: ContextTypes.DEFAULT_TYPE, text: str) -> bool:
     """Determines if the bot should process a message in a group chat."""
     chat_type = update.effective_chat.type
     
-    # 1. Always wake up in private messages
     if chat_type not in ['group', 'supergroup']:
         return True
 
     text_lower = text.strip().lower()
 
-    # 2. Direct Summons (Names, Replies, Commands, Fast-paths)
     if any(name in text_lower for name in ["mattou", "@mattoubot"]): return True
     if update.message.reply_to_message and update.message.reply_to_message.from_user.id == context.bot.id: return True
     if text_lower.startswith("/"): return True
     if text_lower in ["chat", "cat"]: return True
 
-    # 3. Smart Implicit Commands (Checking for intent combinations)
-    
-    # Grocery: "ajoute/add" + "liste/courses"
     if any(w in text_lower for w in ["ajoute", "add", "enlève", "remove"]) and any(w in text_lower for w in ["liste", "courses", "list"]):
         return True
-        
-    # Reminders: "rappelle/remind" + a preposition
     if any(w in text_lower for w in ["rappelle", "remind"]) and any(w in text_lower for w in ["dans", "in", "à", "de", "at", "to"]):
         return True
-        
-    # Decisions: "choisis/décide" + "ou/entre"
     if any(w in text_lower for w in ["décide", "choisis", "decide", "choose"]) and any(w in text_lower for w in ["ou", "or", "entre", "between"]):
         return True
-        
-    # Single strong keywords (Weather, Fitness, Media)
+
     strong_keywords = ["météo", "weather", "recette", "recipe", "strava", "bilan", "stats"]
     if any(w in text_lower for w in strong_keywords):
         return True
 
     return False
+
 
 # ==========================================
 # The Natural Language Understanding Brain
@@ -300,54 +321,19 @@ async def message_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             context.args = data.split(" ", 1)
             await remind_command(update, context)
 
+        elif action == "ignore":
+            logger.info("🙈 Intent: ignore — bot staying quiet.")
+
         elif action == "chat":
             status_msg = await update.message.reply_text("<i>Thinking...</i>", parse_mode=ParseMode.HTML)
-            
-            if 'chat_history' not in context.user_data:
-                context.user_data['chat_history'] = []
-                
-            history_text = "\n".join(context.user_data['chat_history']) if context.user_data['chat_history'] else "None."
-            
-            user_id = update.effective_user.id
-            memories = await search_vault(user_id, user_text)
-            
-            memory_context = ""
-            if memories:
-                memory_context = f"\n[RELEVANT MEMORIES FROM VAULT]\nThe user has previously told you these things. Use them to answer if relevant:\n{memories}\n"
-            
-            persona_prompt = f"""
-            [ROLE]
-            You are MattouBot, a highly intelligent, witty, and helpful personal assistant created by Matthieu.
-            You are currently talking to a user in a Telegram chat.
-
-            [INSTRUCTIONS]
-            1. Be conversational, friendly, and concise. 
-            2. If asked for a joke, make it actually funny and clever.
-            3. If asked a general knowledge question, provide a clear, factual, and helpful answer.
-            4. Keep formatting clean. Use emojis tastefully. No markdown headers.{memory_context}
-            
-            [PREVIOUS CONVERSATION CONTEXT]
-            {history_text}
-            
-            [CURRENT USER MESSAGE]
-            "{user_text}"
-            """
-            
             try:
-                response = await ask_llm(persona_prompt)
-                
+                response = await handle_chat_action(update, context, user_text, is_voice=False)
                 if not response:
                     await status_msg.edit_text("⚠️ My brain is blank right now. Try again?")
                 else:
                     clean_response = response.replace("*", "").replace("#", "")
                     await status_msg.edit_text(clean_response)
-                    
-                    context.user_data['chat_history'].append(f"User: {user_text}")
-                    context.user_data['chat_history'].append(f"MattouBot: {clean_response}")
-                    
-                    if len(context.user_data['chat_history']) > 4:
-                        context.user_data['chat_history'] = context.user_data['chat_history'][-4:]
-                        
+                    log_interaction(context, user_text, clean_response)
             except Exception as e:
                 logger.error(f"❌ General Chat Error: {e}")
                 await status_msg.edit_text(f"❌ My brain is foggy: {str(e)}")
@@ -504,48 +490,12 @@ async def voice_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if cmd_name == "chat":
                 chat_text = args[0] if args else transcription
                 chat_status = await update.message.reply_text("<i>Thinking...</i>", parse_mode=ParseMode.HTML)
-                
-                if 'chat_history' not in context.user_data:
-                    context.user_data['chat_history'] = []
-                
-                history_text = "\n".join(context.user_data['chat_history']) if context.user_data['chat_history'] else "None."
-                
-                user_id = update.effective_user.id
-                memories = await search_vault(user_id, chat_text)
-                
-                memory_context = ""
-                if memories:
-                    memory_context = f"\n[RELEVANT MEMORIES FROM VAULT]\nThe user has previously told you these things. Use them to answer if relevant:\n{memories}\n"
-                
-                persona_prompt = f"""
-                [ROLE]
-                You are MattouBot, a highly intelligent, witty, and helpful personal assistant created by Matthieu.
-                You are currently talking to a user via voice-to-text in Telegram.
-
-                [INSTRUCTIONS]
-                1. Be conversational, friendly, and concise. 
-                2. If asked for a joke, make it actually funny and clever.
-                3. If asked a general knowledge question, provide a clear, factual answer.
-                4. Keep formatting clean. Use emojis tastefully. No markdown headers.{memory_context}
-                
-                [PREVIOUS CONVERSATION CONTEXT]
-                {history_text}
-                
-                [CURRENT USER MESSAGE]
-                "{chat_text}"
-                """
-                
                 try:
-                    chat_response = await ask_llm(persona_prompt)
+                    chat_response = await handle_chat_action(update, context, chat_text, is_voice=True)
                     if chat_response:
                         clean_response = chat_response.replace("*", "").replace("#", "")
                         await chat_status.edit_text(clean_response)
-                        
-                        context.user_data['chat_history'].append(f"User (Voice): {chat_text}")
-                        context.user_data['chat_history'].append(f"MattouBot: {clean_response}")
-                        
-                        if len(context.user_data['chat_history']) > 4:
-                            context.user_data['chat_history'] = context.user_data['chat_history'][-4:]
+                        log_interaction(context, f"(Voice) {chat_text}", clean_response)
                     else:
                         await chat_status.edit_text("⚠️ My brain is blank right now.")
                 except Exception as e:

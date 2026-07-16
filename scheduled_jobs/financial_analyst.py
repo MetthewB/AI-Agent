@@ -44,7 +44,7 @@ def ask_llm(prompt: str) -> str:
             print(f"⚠️ Connection error with {model}: {e}. Skipping to next...")
             
     print("❌ ALL free models on OpenRouter are currently offline or congested.")
-    return "REJECTED: All models unavailable." if "Review this" in prompt else "Error analyzing financial data."
+    return None
 
 class FinancialReportState(TypedDict):
     topic: str
@@ -125,10 +125,16 @@ def financial_writer_node(state: FinancialReportState):
         f"NEWS DATA:\n{state['raw_research']}"
     )
 
-    return {"draft_report": ask_llm(prompt).strip()}
+    result = ask_llm(prompt)
+    if not result:
+        print("❌ All models failed, skipping this run.")
+        return {"draft_report": "", "status": "failed"}
+    return {"draft_report": result.strip()}
 
 def chief_editor_node(state: FinancialReportState):
     print("\n🧐 EDITOR: Validating financial draft...")
+    if state.get("status") == "failed":
+        return state
     approved, feedback = validate_report(state["draft_report"])
     if approved:
         return {"status": "approved", "feedback": "", "revision_count": state["revision_count"] + 1}
@@ -136,6 +142,9 @@ def chief_editor_node(state: FinancialReportState):
 
 def publish_report_node(state: FinancialReportState):
     print("\n💾 SAVING: Dispatching Telegram Message...")
+    if not state["draft_report"]:
+        print("⚠️ Empty report, skipping send.")
+        return state
     token, chat_id = os.environ.get("TELEGRAM_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
     if token and chat_id:
         try:
@@ -146,7 +155,9 @@ def publish_report_node(state: FinancialReportState):
     return state
 
 def routing_logic(state: FinancialReportState):
-    return "publish" if state["status"] == "approved" or state["revision_count"] >= 3 else "research"
+    if state.get("status") == "failed" or state["revision_count"] >= 3:
+        return "publish"
+    return "publish" if state["status"] == "approved" else "research"
 
 def run_financial_pipeline():
     workflow = StateGraph(FinancialReportState)

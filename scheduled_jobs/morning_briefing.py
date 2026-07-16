@@ -1,5 +1,6 @@
 import os
 import time
+import logging
 import requests
 from datetime import datetime, timedelta
 import pytz
@@ -9,6 +10,7 @@ from icalevents.icalevents import events
 from langgraph.graph import StateGraph, END
 from dotenv import load_dotenv
 
+logger = logging.getLogger(__name__)
 script_dir = os.path.dirname(os.path.abspath(__file__))
 env_path = os.path.join(script_dir, '.env')
 load_dotenv(env_path)
@@ -47,7 +49,7 @@ def ask_llm(prompt: str) -> str:
         except Exception as e:
             print(f"⚠️ {model} connection error: {e}. Trying next...")
             
-    return "REJECTED: All models unavailable." if "Review this" in prompt else "Error generating report."
+    return None
 
 def get_weather(lat=46.5197, lon=6.6323):
     try:
@@ -107,29 +109,41 @@ def briefing_writer_node(state: MorningBriefingState):
     today_str = datetime.now().strftime('%A, %B %d, %Y')
     feedback_block = f"PREVIOUS DRAFT WAS REJECTED. FIX THESE ISSUES:\n{state['feedback']}\n\n" if state['feedback'] else ""
 
+    fixed_header = (
+        f"Good morning! It is {today_str}. The weather today is {state['weather']}. ☀️\n"
+        f"{state['agenda']} 📅"
+    )
+
     prompt = (
         f"You are a morning briefing writer. Output the briefing text only — no preamble, no sign-off, no commentary.\n\n"
         f"{feedback_block}"
-        f"Write the briefing using EXACTLY this structure (replace bracketed parts):\n\n"
-        f"Good morning! It is {today_str}. The weather today is {state['weather']}. [one weather emoji]\n"
-        f"{state['agenda']} [one calendar or coffee emoji]\n\n"
+        f"The first two lines are already written. Copy them EXACTLY as-is, then add the news blocks below them.\n\n"
+        f"FIXED HEADER (copy verbatim, do not alter a single word):\n"
+        f"{fixed_header}\n\n"
+        f"Now append these 3 news blocks after a blank line:\n\n"
         f"🌍 World: [1-2 sentence summary of world news]\n\n"
         f"🇨🇭 Switzerland: [1-2 sentence summary of Swiss news]\n\n"
         f"🇫🇷 France: [1-2 sentence summary of French news]\n\n"
         f"STRICT RULES:\n"
-        f"- Output ONLY the briefing. Start with 'Good morning!' and end after the France block.\n"
-        f"- Separate the greeting line, agenda line, and each news block with a blank line.\n"
-        f"- No markdown. No asterisks. No bold. No bullet points. No headers.\n"
+        f"- Start your output with the fixed header above, copied exactly.\n"
+        f"- Follow it with the 3 news blocks, each separated by a blank line.\n"
+        f"- No markdown. No asterisks. No bold. No bullet points.\n"
         f"- Total length: under 150 words.\n"
-        f"- Each news block must contain real details from the news data below, not vague generalities.\n\n"
+        f"- Each news block must use real details from the news data below.\n\n"
         f"NEWS DATA:\n{state['news']}"
     )
         
-    return {"draft": ask_llm(prompt).strip()}
+    result = ask_llm(prompt)
+    if not result:
+        logger.error("❌ All models failed, skipping this run.")
+        return {"draft": "", "status": "failed"}
+    return {"draft": result.strip()}
 
 def validate_draft(draft: str) -> tuple[bool, str]:
     if len(draft.split()) > 180:
         return False, "Too long, keep under 150 words."
+    if "Good morning!" not in draft:
+        return False, "Missing the fixed header. Start with 'Good morning!'."
     for emoji in ["🌍", "🇨🇭", "🇫🇷"]:
         if emoji not in draft:
             return False, f"Missing {emoji} news block."
@@ -142,6 +156,8 @@ def validate_draft(draft: str) -> tuple[bool, str]:
 
 def briefing_editor_node(state: MorningBriefingState):
     print("\n🧐 EDITOR: Validating briefing...")
+    if state.get("status") == "failed":
+        return state
     approved, feedback = validate_draft(state["draft"])
     if approved:
         return {"status": "approved", "feedback": "", "revision_count": state["revision_count"] + 1}
@@ -149,6 +165,9 @@ def briefing_editor_node(state: MorningBriefingState):
 
 def send_briefing_node(state: MorningBriefingState):
     print("\n💾 SAVING: Sending Telegram Message...")
+    if not state["draft"]:
+        print("⚠️ Empty draft, skipping send.")
+        return state
     token, chat_id = os.environ.get("TELEGRAM_TOKEN"), os.environ.get("TELEGRAM_CHAT_ID")
     if token and chat_id:
         try: requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": state["draft"]})
@@ -156,7 +175,9 @@ def send_briefing_node(state: MorningBriefingState):
     return state
 
 def routing_logic(state: MorningBriefingState):
-    return "send" if state["status"] == "approved" or state["revision_count"] >= 3 else "write"
+    if state.get("status") == "failed" or state["revision_count"] >= 3:
+        return "send"
+    return "send" if state["status"] == "approved" else "write"
 
 def run_morning_pipeline():
     print("🌅 Gathering Morning Data...")

@@ -45,8 +45,6 @@ async def init_db():
 
 async def add_to_vault(user_id: int, content: str, metadata: dict = None):
     """Generates embedding and saves a new memory to the vault."""
-    from modules.ai_embeddings import generate_embedding
-    import datetime
     
     vector = await generate_embedding(content)
     if not vector:

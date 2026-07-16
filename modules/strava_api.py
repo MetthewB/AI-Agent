@@ -9,6 +9,16 @@ from modules.config import STRAVA_CLIENT_ID, STRAVA_CLIENT_SECRET, STRAVA_REFRES
 logger = logging.getLogger(__name__)
 
 # ==========================================
+# HELPERS
+# ==========================================
+def extract_coros_load(description: str):
+    """Extracts the Coros training load number from an activity description."""
+    if not description:
+        return None
+    match = re.search(r'(\d+)\s*charge', description.lower())
+    return int(match.group(1)) if match else None
+
+# ==========================================
 # AUTHENTICATION
 # ==========================================
 async def get_strava_access_token() -> str:
@@ -55,12 +65,7 @@ async def sync_activities_to_db(activities_data):
             distance = float(act.get('distance', 0)) / 1000
             duration = int(act.get('moving_time', 0)) // 60
             avg_hr = act.get('average_heartrate')
-            
-            coros_load = None
-            desc = act.get('description', '') or ''
-            load_match = re.search(r'(\d+)\s*charge', desc.lower())
-            if load_match:
-                coros_load = int(load_match.group(1))
+            coros_load = extract_coros_load(act.get('description', ''))
 
             await save_activity(
                 strava_id=strava_id,
@@ -107,16 +112,9 @@ async def get_recent_strava_activities(limit: int = 5) -> str:
             desc = act.get('description', '') or ''
             date_str = act.get('start_date_local', 'Unknown Date')[:10]
             dist = act.get('distance', 0) / 1000
-            moving_time_sec = act.get('moving_time', 0)
-            duration_min = moving_time_sec // 60
-            
+            duration_min = int(act.get('moving_time', 0)) // 60
             hr = act.get('average_heartrate', 'N/A')
-            
-            coros_load = "Unknown"
-            if desc and "charge d'entraînement" in desc.lower():
-                match = re.search(r'(\d+)\s*charge', desc.lower())
-                if match:
-                    coros_load = match.group(1)
+            coros_load = extract_coros_load(desc) or "Unknown"
 
             history.append(
                 f"- {date_str} | Title: '{name}' | Dist: {dist:.1f}km | "
