@@ -21,6 +21,7 @@ jobs:
       - name: Run Morning Briefing
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_API_KEY_BOT: ${{ secrets.OPENROUTER_API_KEY_BOT }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
@@ -41,6 +42,7 @@ jobs:
       - name: Run Financial Analyst
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER_API_KEY_BOT: ${{ secrets.OPENROUTER_API_KEY_BOT }}
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
