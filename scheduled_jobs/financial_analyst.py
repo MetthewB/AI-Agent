@@ -85,6 +85,7 @@ def market_researcher_node(state: FinancialReportState):
                     stats.append(f"{name}: {curr:.2f} ({pct:+.2f}%) {'📈' if pct >= 0 else '📉'}")
             except: pass
         portfolio_data = "\n".join(stats) if stats else "Portfolio data unavailable."
+        print(f"   -> Portfolio data fetched:\n{portfolio_data}") 
 
     return {"raw_research": new_research, "portfolio_data": portfolio_data}
 
@@ -94,8 +95,8 @@ def validate_report(draft: str) -> tuple[bool, str]:
     for section in ["Global Markets", "Portfolio", "Switzerland"]:
         if section not in draft:
             return False, f"Missing '{section}' section."
-    if "**" in draft or "##" in draft or "__" in draft:
-        return False, "Contains markdown formatting."
+    if "*" in draft or "##" in draft or "__" in draft:
+        return False, "Contains markdown formatting. Remove ALL asterisks and symbols."
     blocks = [b.strip() for b in draft.split("\n\n") if b.strip()]
     if len(blocks) < 3:
         return False, "Missing double newlines between sections."
@@ -118,7 +119,8 @@ def financial_writer_node(state: FinancialReportState):
         f"STRICT RULES:\n"
         f"- Output ONLY the briefing. Start with 'Global Markets:' and end after the Switzerland jobs block.\n"
         f"- Separate each of the 3 sections with a blank line.\n"
-        f"- No markdown. No asterisks. No bold. No bullet points. No headers.\n"
+        f"- No markdown whatsoever. No asterisks, no bold, no italics, no bullet points, no headers. Not even a single * character.\n"
+        f"- Do NOT wrap the output in asterisks or any other punctuation.\n"
         f"- Total length: under 150 words.\n"
         f"- The Portfolio block must be reproduced exactly as provided above — do not reword or reformat it.\n"
         f"- The Switzerland jobs section must name real companies and real Swiss cities.\n\n"
@@ -129,7 +131,9 @@ def financial_writer_node(state: FinancialReportState):
     if not result:
         print("❌ All models failed, skipping this run.")
         return {"draft_report": "", "status": "failed"}
-    return {"draft_report": result.strip()}
+    
+    clean_result = result.strip().strip("*").strip()
+    return {"draft_report": clean_result}
 
 def chief_editor_node(state: FinancialReportState):
     print("\n🧐 EDITOR: Validating financial draft...")

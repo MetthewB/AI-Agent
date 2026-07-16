@@ -1,21 +1,21 @@
 import requests
 import logging
 import asyncio
-from modules.config import OPENROUTER_API_KEY
+from modules.config import OPENROUTER_API_KEY_BOT
 
 logger = logging.getLogger(__name__)
 
 FREE_MODELS = [
     "google/gemma-4-31b-it:free",
     "meta-llama/llama-3.3-70b-instruct:free",
-    "mistralai/mistral-small-3.1-24b-instruct:free",
-    "microsoft/phi-4-reasoning-plus:free",
-    "deepseek/deepseek-r1-0528:free",
+    "qwen/qwen3-8b:free",
+    "mistralai/mistral-7b-instruct:free",
+    "nousresearch/deephermes-3-llama-3-8b:free",
 ]
 
 async def ask_llm(prompt: str, max_tokens: int = 800) -> str:
     headers = {
-        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Authorization": f"Bearer {OPENROUTER_API_KEY_BOT}",
         "Content-Type": "application/json"
     }
 

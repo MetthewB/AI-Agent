@@ -57,7 +57,7 @@ def get_weather(lat=46.5197, lon=6.6323):
         daily = requests.get(url).json()['daily']
         code = daily['weathercode'][0]
         wmo_map = {0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Foggy", 51: "Light drizzle", 61: "Light rain", 71: "Light snow", 95: "Thunderstorm"}
-        return f"{wmo_map.get(code, 'Mixed weather').lower()}, with temperatures going from {daily['temperature_2m_min'][0]} up to {daily['temperature_2m_max'][0]} degrees."
+        return f"{wmo_map.get(code, 'Mixed weather').lower()}, with temperatures going from {daily['temperature_2m_min'][0]} up to {daily['temperature_2m_max'][0]} degrees"
     except: 
         return "Weather unavailable"
 
