@@ -1,4 +1,5 @@
 import os
+import time
 import requests
 from datetime import datetime, timedelta
 import pytz
@@ -54,7 +55,7 @@ def get_weather(lat=46.5197, lon=6.6323):
         daily = requests.get(url).json()['daily']
         code = daily['weathercode'][0]
         wmo_map = {0: "Clear sky", 1: "Mainly clear", 2: "Partly cloudy", 3: "Overcast", 45: "Foggy", 51: "Light drizzle", 61: "Light rain", 71: "Light snow", 95: "Thunderstorm"}
-        return f"{wmo_map.get(code, 'Mixed weather').lower()}, with temperatures going from {daily['temperature_2m_min'][0]}°C up to {daily['temperature_2m_max'][0]}°C"
+        return f"{wmo_map.get(code, 'Mixed weather').lower()}, with temperatures going from {daily['temperature_2m_min'][0]} up to {daily['temperature_2m_max'][0]} degrees."
     except: 
         return "Weather unavailable"
 
@@ -100,65 +101,51 @@ class MorningBriefingState(TypedDict):
 
 def briefing_writer_node(state: MorningBriefingState):
     print("\n✍️ WRITER: Drafting morning briefing...")
+    if state["revision_count"] > 0:
+        time.sleep(2)
+    
     today_str = datetime.now().strftime('%A, %B %d, %Y')
-    
-    prompt = f"""
-    Write a morning briefing.
-    
-    REQUIRED STRUCTURE AND TONE (Conversational & Warm):
-    Good morning! It is {today_str}. The weather today is {state['weather']}. [Weather Emoji]
-    {state['agenda']} [Coffee/Calendar Emoji]
-    
-    [News Paragraph 1]
-    
-    [News Paragraph 2]
-    
-    [News Paragraph 3]
+    feedback_block = f"PREVIOUS DRAFT WAS REJECTED. FIX THESE ISSUES:\n{state['feedback']}\n\n" if state['feedback'] else ""
 
-    NEWS RULES:
-    - You must write exactly 3 distinct news blocks separated by double newlines (one for 🌍, one for 🇨🇭, and one for 🇫🇷).
-    - Start each news block directly with its emoji (🌍, 🇨🇭, or 🇫🇷) followed by prefixes like "World:", "Switzerland:", or "France:", immediatly followed by the informative 1-2 sentence summary.
-    
-    CRITICAL FORMATTING RULES:
-    - ABSOLUTELY NO MARKDOWN (no asterisks, no headers, no bolding).
-    - No filler text, intro preambles, or closing sign-offs.
-
-    News Data Context:
-    {state['news']}
-
-    RULES: 
-    - Keep the exact greeting format above.
-    - Keep it under 150 words.
-    - Make sure the news points are informative and give actual details.
-    - Do not add any filler text, preamble, or sign-offs.
-    - ABSOLUTELY NO MARKDOWN (no asterisks, no bolding).
-    """
-    
-    if state['feedback']: 
-        prompt += f"\nFIX THIS FROM PREVIOUS DRAFT: {state['feedback']}"
+    prompt = (
+        f"You are a morning briefing writer. Output the briefing text only — no preamble, no sign-off, no commentary.\n\n"
+        f"{feedback_block}"
+        f"Write the briefing using EXACTLY this structure (replace bracketed parts):\n\n"
+        f"Good morning! It is {today_str}. The weather today is {state['weather']}. [one weather emoji]\n"
+        f"{state['agenda']} [one calendar or coffee emoji]\n\n"
+        f"🌍 World: [1-2 sentence summary of world news]\n\n"
+        f"🇨🇭 Switzerland: [1-2 sentence summary of Swiss news]\n\n"
+        f"🇫🇷 France: [1-2 sentence summary of French news]\n\n"
+        f"STRICT RULES:\n"
+        f"- Output ONLY the briefing. Start with 'Good morning!' and end after the France block.\n"
+        f"- Separate the greeting line, agenda line, and each news block with a blank line.\n"
+        f"- No markdown. No asterisks. No bold. No bullet points. No headers.\n"
+        f"- Total length: under 150 words.\n"
+        f"- Each news block must contain real details from the news data below, not vague generalities.\n\n"
+        f"NEWS DATA:\n{state['news']}"
+    )
         
     return {"draft": ask_llm(prompt).strip()}
 
+def validate_draft(draft: str) -> tuple[bool, str]:
+    if len(draft.split()) > 180:
+        return False, "Too long, keep under 150 words."
+    for emoji in ["🌍", "🇨🇭", "🇫🇷"]:
+        if emoji not in draft:
+            return False, f"Missing {emoji} news block."
+    if "**" in draft or "##" in draft or "__" in draft:
+        return False, "Contains markdown formatting."
+    blocks = [b.strip() for b in draft.split("\n\n") if b.strip()]
+    if len(blocks) < 4:
+        return False, "Missing double newlines between sections."
+    return True, ""
+
 def briefing_editor_node(state: MorningBriefingState):
-    print("\n🧐 EDITOR: Reviewing briefing...")
-    prompt = f"""
-    Review this briefing draft. 
-    
-    CRITICAL CHECKLIST:
-    1. It MUST have double newlines separating the greeting/agenda from the news, and double newlines separating each of the 3 news blocks.
-    2. The 3 news blocks MUST start directly with their emojis (🌍, 🇨🇭, 🇫🇷). 
-    3. There MUST be written label prefixes (like "World:", "France:", etc.) right after the emojis.
-    4. There MUST be ZERO markdown or asterisks anywhere in the text.
-    5. The text must be under 150 words total.
-    
-    Draft: 
-    {state['draft']}
-    
-    If perfect, reply EXACTLY: APPROVED. Else, reply REJECTED followed by raw instructions on what to fix.
-    """    
-    review = ask_llm(prompt).strip()
-    if review.startswith("APPROVED"): return {"status": "approved", "feedback": "", "revision_count": state["revision_count"] + 1}
-    return {"status": "rejected", "feedback": review.replace("REJECTED", "").strip(), "revision_count": state["revision_count"] + 1}
+    print("\n🧐 EDITOR: Validating briefing...")
+    approved, feedback = validate_draft(state["draft"])
+    if approved:
+        return {"status": "approved", "feedback": "", "revision_count": state["revision_count"] + 1}
+    return {"status": "rejected", "feedback": feedback, "revision_count": state["revision_count"] + 1}
 
 def send_briefing_node(state: MorningBriefingState):
     print("\n💾 SAVING: Sending Telegram Message...")

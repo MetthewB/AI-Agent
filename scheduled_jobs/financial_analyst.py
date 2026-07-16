@@ -1,6 +1,6 @@
 import os
+import time
 import requests
-from datetime import datetime
 from typing import TypedDict
 import yfinance as yf
 from langgraph.graph import StateGraph, END
@@ -10,7 +10,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 def ask_llm(prompt: str) -> str:
-    """Routes the financial analysis prompt to OpenRouter using free models with a fallback chain."""
     url = "https://openrouter.ai/api/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {os.environ.get('OPENROUTER_API_KEY')}",
@@ -29,28 +28,23 @@ def ask_llm(prompt: str) -> str:
         payload = {
             "model": model,
             "messages": [{"role": "user", "content": prompt}],
-            "max_tokens": 450,
+            "max_tokens": 800,
             "temperature": 0.4
         }
         
         try:
             res = requests.post(url, headers=headers, json=payload, timeout=15.0)
-            
             if res.status_code == 200:
                 raw_text = res.json().get('choices', [{}])[0].get('message', {}).get('content', '')
                 if raw_text.strip():
                     return raw_text.strip()
             else:
                 print(f"⚠️ Free model {model} failed with status {res.status_code}. Trying next...")
-                continue
-                
         except Exception as e:
             print(f"⚠️ Connection error with {model}: {e}. Skipping to next...")
-            continue
             
     print("❌ ALL free models on OpenRouter are currently offline or congested.")
-
-    return "APPROVED" if "Review this" in prompt else "Error analyzing financial data."
+    return "REJECTED: All models unavailable." if "Review this" in prompt else "Error analyzing financial data."
 
 class FinancialReportState(TypedDict):
     topic: str
@@ -90,55 +84,55 @@ def market_researcher_node(state: FinancialReportState):
                     pct = ((curr - prev) / prev) * 100
                     stats.append(f"{name}: {curr:.2f} ({pct:+.2f}%) {'📈' if pct >= 0 else '📉'}")
             except: pass
-        portfolio_data = "\n".join(stats)
+        portfolio_data = "\n".join(stats) if stats else "Portfolio data unavailable."
 
     return {"raw_research": new_research, "portfolio_data": portfolio_data}
 
+def validate_report(draft: str) -> tuple[bool, str]:
+    if len(draft.split()) > 200:
+        return False, "Too long, keep under 150 words."
+    for section in ["Global Markets", "Portfolio", "Switzerland"]:
+        if section not in draft:
+            return False, f"Missing '{section}' section."
+    if "**" in draft or "##" in draft or "__" in draft:
+        return False, "Contains markdown formatting."
+    blocks = [b.strip() for b in draft.split("\n\n") if b.strip()]
+    if len(blocks) < 3:
+        return False, "Missing double newlines between sections."
+    return True, ""
+
 def financial_writer_node(state: FinancialReportState):
     print("\n✍️ WRITER: Drafting the financial report...")
-    prompt = f"""
-    Write a clean daily financial briefing. Keep it under 150 words total.
-    
-    CRITICAL STRUCTURE (You MUST separate these 3 blocks with double newlines):
-    Global Markets: ...
-    
-    Portfolio: ...
-    
-    Jobs in Switzerland: ...
+    if state["revision_count"] > 0:
+        time.sleep(2)
 
-    RULES:
-    1. Global Markets: Highlight the single most important global macro trend or tech tilt today.
-    2. Portfolio: Output the exact raw lines provided below as-is.
-    3. Jobs in Switzerland: Focus explicitly on AI-oriented roles, Machine Learning, and software talent. Mention active companies with job offers and their locations in Switzerland.
-    4. Formatting: ABSOLUTELY NO MARKDOWN (no asterisks, no bolding, no headers). 
-    5. Emojis: Use a few emojis naturally to break up the flow.
+    feedback_block = f"PREVIOUS DRAFT WAS REJECTED. FIX THESE ISSUES:\n{state['feedback']}\n\n" if state['feedback'] else ""
 
-    Exact Portfolio Block to Output:
-    {state["portfolio_data"]}
+    prompt = (
+        f"You are a financial briefing writer. Output the briefing text only — no preamble, no sign-off, no commentary.\n\n"
+        f"{feedback_block}"
+        f"Write the briefing using EXACTLY this structure (replace bracketed parts):\n\n"
+        f"Global Markets: [1-2 sentences on the single most important macro or tech market trend today. Use an emoji.]\n\n"
+        f"Portfolio:\n{state['portfolio_data']}\n\n"
+        f"Jobs in Switzerland: [2-3 sentences naming specific companies actively hiring for AI, ML, or software roles in Switzerland, including their city locations.]\n\n"
+        f"STRICT RULES:\n"
+        f"- Output ONLY the briefing. Start with 'Global Markets:' and end after the Switzerland jobs block.\n"
+        f"- Separate each of the 3 sections with a blank line.\n"
+        f"- No markdown. No asterisks. No bold. No bullet points. No headers.\n"
+        f"- Total length: under 150 words.\n"
+        f"- The Portfolio block must be reproduced exactly as provided above — do not reword or reformat it.\n"
+        f"- The Switzerland jobs section must name real companies and real Swiss cities.\n\n"
+        f"NEWS DATA:\n{state['raw_research']}"
+    )
 
-    News Data for Context:
-    {state["raw_research"]}
-    """
     return {"draft_report": ask_llm(prompt).strip()}
 
 def chief_editor_node(state: FinancialReportState):
-    print("\n🧐 EDITOR: Reviewing financial draft...")
-    prompt = f"""
-    Review this draft. 
-    - It MUST be under 120 words.
-    - It MUST have double newlines separating Markets, Portfolio, and Swiss Jobs.
-    - It MUST have ZERO markdown/asterisks.
-    - The Swiss Jobs section MUST explicitly focus on AI engineering talent and name companies along with their specific Swiss locations.
-    
-    Draft: 
-    {state["draft_report"]}
-    
-    If perfect, reply APPROVED. Otherwise, reply REJECTED followed by raw instructions.
-    """
-    review = ask_llm(prompt).strip()
-    if review.startswith("APPROVED"):
+    print("\n🧐 EDITOR: Validating financial draft...")
+    approved, feedback = validate_report(state["draft_report"])
+    if approved:
         return {"status": "approved", "feedback": "", "revision_count": state["revision_count"] + 1}
-    return {"status": "rejected", "feedback": review.replace("REJECTED", "").strip(), "revision_count": state["revision_count"] + 1}
+    return {"status": "rejected", "feedback": feedback, "revision_count": state["revision_count"] + 1}
 
 def publish_report_node(state: FinancialReportState):
     print("\n💾 SAVING: Dispatching Telegram Message...")
@@ -147,7 +141,8 @@ def publish_report_node(state: FinancialReportState):
         try:
             requests.post(f"https://api.telegram.org/bot{token}/sendMessage", json={"chat_id": chat_id, "text": state["draft_report"][:4090]})
             print("   -> 📱 Report sent successfully!")
-        except Exception as e: print(f"   -> ❌ Failed to send: {e}")
+        except Exception as e:
+            print(f"   -> ❌ Failed to send: {e}")
     return state
 
 def routing_logic(state: FinancialReportState):
@@ -168,7 +163,15 @@ def run_financial_pipeline():
     
     topic = "Global stock market trends, specific stocks to buy/sell, and the engineering job market in Switzerland"
     print(f"\n🚀 Starting Financial Pipeline for: {topic}")
-    workflow.compile().invoke({"topic": topic, "raw_research": "", "portfolio_data": "", "draft_report": "", "feedback": "", "status": "", "revision_count": 0})
+    workflow.compile().invoke({
+        "topic": topic,
+        "raw_research": "",
+        "portfolio_data": "",
+        "draft_report": "",
+        "feedback": "",
+        "status": "",
+        "revision_count": 0
+    })
 
 if __name__ == "__main__":
     run_financial_pipeline()
