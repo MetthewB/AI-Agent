@@ -67,16 +67,41 @@ def get_calendar_events():
     cal_url = cal_url.replace("webcal://", "https://")
     try:
         swiss_tz = pytz.timezone('Europe/Zurich')
-        start = datetime.now(swiss_tz).replace(hour=0, minute=0, second=0, microsecond=0)
-        cal_events = events(url=cal_url, start=start, end=start + timedelta(days=1))
-        if not cal_events: return "Your calendar is clear today."
+        now = datetime.now(swiss_tz)
+        start_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_tomorrow = start_today + timedelta(days=1)
+        end_window = start_today + timedelta(days=2)
+        
+        cal_events = events(url=cal_url, start=start_today, end=end_window)
+        if not cal_events: return "Your calendar is clear today and tomorrow."
+
         cal_events.sort(key=lambda e: e.start)
         agenda_items = []
         for e in cal_events:
-            time_str = e.start.astimezone(swiss_tz).strftime('%H:%M')
-            display_time = "All day" if time_str == "02:00" else time_str
-            agenda_items.append(f"{display_time}: {e.summary}") 
-        return "Agenda: " + " | ".join(agenda_items)     
+            e_start = e.start if e.start.tzinfo else swiss_tz.localize(e.start)
+            local_start = e_start.astimezone(swiss_tz)
+            event_date = local_start.date()
+            
+            if event_date == start_today.date():
+                day_label = "Today"
+            elif event_date == start_tomorrow.date():
+                day_label = "Tomorrow"
+            else:
+                continue 
+            
+            time_str = local_start.strftime('%H:%M')
+            is_all_day = getattr(e, 'all_day', False)
+            if is_all_day or time_str in ["00:00", "01:00", "02:00"]:
+                display_time = "All day"
+            else:
+                display_time = time_str
+                
+            agenda_items.append(f"{day_label} ({display_time}): {e.summary}") 
+            
+        if not agenda_items: 
+            return "Your calendar is clear today and tomorrow."
+            
+        return "Agenda: " + " | ".join(agenda_items)        
     except Exception as e: 
         print(f"Calendar Error: {e}")
         return "Could not load calendar."
