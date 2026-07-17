@@ -9,6 +9,7 @@ from telegram.ext import ContextTypes
 from telegram.constants import ParseMode
 
 from modules.ai_core import ask_llm
+from modules.database import save_activity
 from modules.strava_api import get_recent_strava_activities, get_strava_access_token
 from modules.utils import is_authorized 
 
@@ -19,9 +20,18 @@ logger = logging.getLogger(__name__)
 # ==========================================
 async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_authorized(update): return None
-    logger.info(f"▶️ User {update.effective_chat.id} triggered /train")
     
-    request_details = " ".join(context.args)
+    raw_text = update.message.text if update.message and update.message.text else ""
+    logger.info(f"▶️ User {update.effective_chat.id} triggered /train with: {raw_text}")
+    
+    request_details = " ".join(context.args).strip()
+    if not request_details and raw_text and not raw_text.startswith('/'):
+        req_lower = raw_text.lower()
+        if req_lower.startswith("train "):
+            request_details = raw_text[6:].strip()
+        else:
+            request_details = raw_text
+
     lang = context.user_data.get('lang', 'fr')
     
     if request_details:
@@ -90,8 +100,21 @@ async def train_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     • [Details]
     """
 
-    workout = await ask_llm(prompt)
+    workout = ""
+    for attempt in range(3):
+        workout = await ask_llm(prompt)
+        if workout and "User Safety:" not in workout:
+            break
+        logger.warning(f"⚠️ Caught safety model response. Retrying ({attempt+1}/3)...")
+        await asyncio.sleep(1)
+
+    if not workout or "User Safety:" in workout:
+        error_text = "⚠️ L'IA a refusé ou échoué à générer la séance." if lang == 'fr' else "⚠️ AI failed to generate the workout."
+        await status_msg.edit_text(error_text)
+        return None
+
     clean_workout = workout.replace("*", "").strip()
+    
     try:
         await status_msg.edit_text(clean_workout)
         return clean_workout
@@ -138,31 +161,53 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     try:
         res = await asyncio.to_thread(requests.get, url, headers=headers, timeout=10)
+        
+        if res.status_code != 200:
+            logger.error(f"❌ Strava API Error ({res.status_code}): {res.text}")
+            err_msg = "⚠️ <i>Erreur Strava. Token expiré ?</i>" if lang == 'fr' else "⚠️ <i>Strava Error. Token expired?</i>"
+            await status_msg.edit_text(err_msg, parse_mode=ParseMode.HTML)
+            return None
+
         activities = res.json()
         
+        if isinstance(activities, dict):
+            logger.error(f"❌ Expected list of activities, got dict: {activities}")
+            err_msg = "⚠️ <i>Strava a renvoyé une erreur.</i>" if lang == 'fr' else "⚠️ <i>Strava returned an error.</i>"
+            await status_msg.edit_text(err_msg, parse_mode=ParseMode.HTML)
+            return None
+        
         if not activities:
-            no_act_msg = "📊 Aucune activité enregistrée ces 7 derniers jours. Il est temps de s'y mettre !" if lang == 'fr' else "📊 No activities logged in the last 7 days. Time to get started!"
+            no_act_msg = "📊 Aucune activité enregistrée ces 7 derniers jours." if lang == 'fr' else "📊 No activities logged in the last 7 days."
             await status_msg.edit_text(no_act_msg)
             return no_act_msg
-        
-        try:
-            from modules.strava_api import sync_activities_to_db
-            await sync_activities_to_db(activities)
-        except ImportError:
-            pass
-            
+                    
         total_time, total_load, activity_count = 0, 0, len(activities)
         sport_stats = {}
         
         for act in activities:
+            strava_id = act.get('id')
             sport = act.get('sport_type', 'Activity')
             dist_km = act.get('distance', 0) / 1000
             time_min = act.get('moving_time', 0) / 60
+            avg_hr = act.get('average_heartrate', None)
 
             act_load = 0
             desc = act.get('description', '') or ''
             load_match = re.search(r'(\d+)\s*charge', desc.lower())
             if load_match: act_load = int(load_match.group(1))
+
+            if strava_id:
+                try:
+                    await save_activity(
+                        strava_id=strava_id, 
+                        sport=sport, 
+                        distance_km=dist_km, 
+                        duration_min=int(time_min), 
+                        coros_load=act_load, 
+                        avg_hr=avg_hr
+                    )
+                except Exception as db_err:
+                    logger.error(f"⚠️ Failed to save activity {strava_id} to DB: {db_err}")
 
             total_time += time_min
             total_load += act_load

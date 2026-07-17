@@ -18,32 +18,40 @@ async def ask_llm(prompt: str, max_tokens: int = 800) -> str:
         "max_tokens": max_tokens
     }
     
-    try:
-        logger.info("🧠 Asking AI")
-        response = await asyncio.to_thread(
-            requests.post,
-            "https://openrouter.ai/api/v1/chat/completions",
-            headers=headers,
-            json=payload,
-            timeout=25
-        )
-        
-        if response.status_code == 200:
-            content = response.json()["choices"][0]["message"]["content"]
-            model_used = response.json().get("model", "unknown free model")
+    for attempt in range(3):
+        try:
+            logger.info(f"🧠 Asking AI (Attempt {attempt + 1}/3)...")
+            response = await asyncio.to_thread(
+                requests.post,
+                "https://openrouter.ai/api/v1/chat/completions",
+                headers=headers,
+                json=payload,
+                timeout=25
+            )
             
-            if content and content.strip():
-                logger.info(f"✅ Success! Routed to: {model_used}")
+            if response.status_code == 200:
+                content = response.json()["choices"][0]["message"]["content"]
+                
+                if not content or not content.strip():
+                    logger.warning("⚠️ OpenRouter returned an empty string. Retrying...")
+                    continue
+                    
+                if "User Safety:" in content:
+                    logger.warning("⚠️ OpenRouter routed to a safety model. Retrying...")
+                    continue
+                    
+                logger.info("✅ Success! Valid response received.")
                 return content.strip()
+                
+            elif response.status_code == 429:
+                logger.warning("⚠️ Rate limited (429). Retrying...")
+            else:
+                logger.error(f"❌ API Error {response.status_code}: {response.text}")
+
+        except Exception as e:
+            logger.warning(f"⚠️ Connection error: {e}. Retrying...")
             
-            logger.warning("⚠️ OpenRouter returned an empty string.")
+        await asyncio.sleep(2)
         
-        elif response.status_code == 429:
-             logger.error("❌ Global rate limit hit for OpenRouter's free tier. Try again later.")
-        else:
-            logger.error(f"❌ OpenRouter API failed with status {response.status_code}: {response.text}")
-            
-    except Exception as e:
-        logger.error(f"❌ Connection error with OpenRouter: {e}")
-        
-    return None
+    logger.error("❌ All AI attempts failed.")
+    return "⚠️ L'IA est indisponible pour le moment. Veuillez réessayer plus tard."

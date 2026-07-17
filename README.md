@@ -2,7 +2,9 @@
 
 This repository contains the source code, architecture, and deployment configurations for a comprehensive, dual-system personal AI assistant. The ecosystem integrates a continuous interactive chatbot with an automated, scheduled multi-agent swarm to handle daily task management, telemetry analysis, global financial research, media curation, and automated briefings.
 
-## ✨ Core Capabilities
+---
+
+## 💪 Core Capabilities
 
 MattouBot is designed to feel like a real assistant rather than a rigid command-line tool. 
 * **Natural Language Understanding (NLU):** No need to rely strictly on `/commands`. You can speak naturally (e.g., *"ajoute du lait à la liste"*, *"what's the weather in London in 2 days?"*, or *"give me a top 3 sci-fi movie list"*), and the bot's NLU router will parse your intent and execute the correct function.
