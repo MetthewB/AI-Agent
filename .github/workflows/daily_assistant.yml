@@ -2,9 +2,9 @@ name: Daily Personal Assistant
 
 on:
   schedule:
-    - cron: '05 5 * * *'  # Morning Briefing
-    - cron: '00 8 * * *'  # Financial Analyst
-    - cron: '00 5 * * *'  # Cat Break
+    - cron: '00 2 * * *'  # Morning Briefing
+    - cron: '15 2 * * *'  # Financial Analyst
+    - cron: '30 2 * * *'  # Cat Break
   workflow_dispatch:
 
 jobs:
