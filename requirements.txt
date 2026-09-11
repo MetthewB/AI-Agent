@@ -8,7 +8,7 @@ beautifulsoup4
 lxml
 huggingface-hub
 apscheduler
-pymongo>=4.17.0
+pymongo>=4.18.0
 certifi
 python-dotenv
 motor
